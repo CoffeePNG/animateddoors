@@ -4,6 +4,7 @@ import com.coffeepng.animateddoors.command.DoorCommand;
 import com.coffeepng.animateddoors.door.DoorAnimator;
 import com.coffeepng.animateddoors.door.DoorManager;
 import com.coffeepng.animateddoors.door.DoorStorage;
+import com.coffeepng.animateddoors.door.ToggleResult;
 import com.coffeepng.animateddoors.listener.RedstoneListener;
 import com.coffeepng.animateddoors.listener.PlayerListener;
 import com.coffeepng.animateddoors.model.BlockVector3;
@@ -32,6 +33,7 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
     private int stepTicks;
     private int cooldownTicks;
     private boolean clickToToggle;
+    private boolean blockFilledContainers;
     private String wandMaterial;
 
     @Override
@@ -80,6 +82,7 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
         this.stepTicks = getConfig().getInt("animation.step-ticks", 2);
         this.cooldownTicks = getConfig().getInt("triggers.cooldown-ticks", 10);
         this.clickToToggle = getConfig().getBoolean("triggers.click-door-to-toggle", true);
+        this.blockFilledContainers = getConfig().getBoolean("restrictions.block-filled-containers", true);
         this.wandMaterial = getConfig().getString("selection.wand-material", "BLAZE_ROD");
     }
 
@@ -161,18 +164,21 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
     /**
      * Toggle a door if it is not busy or on cooldown. Central entry point for commands and triggers.
      *
-     * @return true if the swing started.
+     * @return the outcome; {@link ToggleResult#STARTED} means the swing began.
      */
-    public boolean attemptToggle(Door door) {
+    public ToggleResult attemptToggle(Door door) {
         long tick = getServer().getCurrentTick();
-        if (door.isAnimating() || doorManager.onCooldown(door, tick, cooldownTicks)) {
-            return false;
+        if (door.isAnimating()) {
+            return ToggleResult.BUSY;
         }
-        boolean started = doorAnimator.toggle(door);
-        if (started) {
+        if (doorManager.onCooldown(door, tick, cooldownTicks)) {
+            return ToggleResult.COOLDOWN;
+        }
+        ToggleResult result = doorAnimator.toggle(door);
+        if (result == ToggleResult.STARTED) {
             doorManager.markToggled(door, tick);
         }
-        return started;
+        return result;
     }
 
     // ---- Accessors ---------------------------------------------------------
@@ -207,6 +213,10 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
 
     public boolean isClickToToggle() {
         return clickToToggle;
+    }
+
+    public boolean isBlockFilledContainers() {
+        return blockFilledContainers;
     }
 
     public String getWandMaterial() {

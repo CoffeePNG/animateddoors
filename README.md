@@ -91,6 +91,8 @@ selection:
 
 - Doors swing in 90° steps around a vertical hinge (classic gate/door motion). Drawbridges, portcullises,
   and other structure types are out of scope here.
-- Tile-entity **contents** are not preserved — don't build chests, furnaces, or signs-with-text into a
-  door; their inventories/text will be lost when the door swings. Plain decorative blocks are fine.
+- Tile-entity **contents** are not preserved by a swing. To protect them, a door refuses to move while
+  any container inside it (chest, barrel, furnace, hopper, shulker box, …) still holds items — empty it
+  first, or disable the guard with `restrictions.block-filled-containers: false`. Empty containers move
+  freely. Sign text is still not preserved.
 - A swing overwrites whatever occupies the destination cells, so leave the door's opening arc clear.

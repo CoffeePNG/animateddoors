@@ -7,6 +7,9 @@ import com.coffeepng.animateddoors.util.BlockRotation;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.Container;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.BlockDisplay;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -34,15 +37,15 @@ public class DoorAnimator {
     /**
      * Toggle the door (open if closed, close if open) with animation.
      *
-     * @return false if the door could not be animated right now (busy, unloaded, empty).
+     * @return the outcome; {@link ToggleResult#STARTED} means the swing began.
      */
-    public boolean toggle(Door door) {
+    public ToggleResult toggle(Door door) {
         if (door.isAnimating()) {
-            return false;
+            return ToggleResult.BUSY;
         }
         World world = plugin.getServer().getWorld(door.getWorld());
         if (world == null) {
-            return false;
+            return ToggleResult.NO_WORLD;
         }
 
         boolean opening = !door.isOpen();
@@ -56,9 +59,14 @@ public class DoorAnimator {
 
         for (BlockVector3 closed : door.closedPositions()) {
             BlockVector3 from = BlockRotation.rotate(closed, door.getHingeX(), door.getHingeZ(), fromQuarters);
-            BlockData data = world.getBlockAt(from.x(), from.y(), from.z()).getBlockData();
+            Block block = world.getBlockAt(from.x(), from.y(), from.z());
+            BlockData data = block.getBlockData();
             if (data.getMaterial().isAir()) {
                 continue;
+            }
+            // Refuse to move a container that still holds items — its contents would be lost.
+            if (plugin.isBlockFilledContainers() && isFilledContainer(block)) {
+                return ToggleResult.CONTAINER_WITH_ITEMS;
             }
             BlockVector3 to = BlockRotation.rotate(closed, door.getHingeX(), door.getHingeZ(),
                     opening ? q : 0);
@@ -68,7 +76,7 @@ public class DoorAnimator {
         }
 
         if (datas.isEmpty()) {
-            return false;
+            return ToggleResult.EMPTY;
         }
 
         door.setAnimating(true);
@@ -136,7 +144,16 @@ public class DoorAnimator {
             }
         }.runTaskTimer(plugin, 0L, stepTicks);
 
-        return true;
+        return ToggleResult.STARTED;
+    }
+
+    /** True if the block is a container whose inventory is not empty. */
+    private static boolean isFilledContainer(Block block) {
+        BlockState state = block.getState(false);
+        if (state instanceof Container container) {
+            return !container.getInventory().isEmpty();
+        }
+        return false;
     }
 
     private void finish(World world, List<BlockDisplay> displays, List<BlockData> datas,

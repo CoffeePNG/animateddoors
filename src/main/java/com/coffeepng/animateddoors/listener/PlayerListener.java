@@ -1,6 +1,7 @@
 package com.coffeepng.animateddoors.listener;
 
 import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
+import com.coffeepng.animateddoors.door.ToggleResult;
 import com.coffeepng.animateddoors.model.BlockVector3;
 import com.coffeepng.animateddoors.model.Door;
 import com.coffeepng.animateddoors.selection.SelectionManager;
@@ -98,8 +99,9 @@ public class PlayerListener implements Listener {
     }
 
     private void toggle(Player player, Door door) {
-        if (!plugin.attemptToggle(door)) {
-            player.sendMessage(Component.text("That door is busy right now.", NamedTextColor.GRAY));
+        ToggleResult result = plugin.attemptToggle(door);
+        if (result != ToggleResult.STARTED) {
+            player.sendMessage(Component.text(result.message(), NamedTextColor.GRAY));
         }
     }
 

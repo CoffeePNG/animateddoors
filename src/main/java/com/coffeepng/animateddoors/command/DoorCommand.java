@@ -2,6 +2,7 @@ package com.coffeepng.animateddoors.command;
 
 import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
 import com.coffeepng.animateddoors.model.BlockVector3;
+import com.coffeepng.animateddoors.door.ToggleResult;
 import com.coffeepng.animateddoors.model.Door;
 import com.coffeepng.animateddoors.selection.SelectionManager;
 import net.kyori.adventure.text.Component;
@@ -263,8 +264,9 @@ public class DoorCommand implements TabExecutor {
         if (door == null) {
             return;
         }
-        if (!plugin.attemptToggle(door)) {
-            msg(sender, NamedTextColor.GRAY, "That door is busy or on cooldown.");
+        ToggleResult result = plugin.attemptToggle(door);
+        if (result != ToggleResult.STARTED) {
+            msg(sender, NamedTextColor.GRAY, result.message());
         }
     }
 

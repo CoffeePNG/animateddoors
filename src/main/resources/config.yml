@@ -13,6 +13,12 @@ triggers:
   # Cooldown (in ticks) before the same door can be toggled again. Prevents redstone spam / double-fires.
   cooldown-ticks: 10
 
+restrictions:
+  # If true, a door refuses to move while any container inside it (chest, barrel, furnace,
+  # hopper, shulker box, etc.) still holds items. This protects their contents, which are not
+  # preserved during a swing. Empty containers move freely.
+  block-filled-containers: true
+
 selection:
   # Material of the selection wand given by /door wand.
   wand-material: BLAZE_ROD
