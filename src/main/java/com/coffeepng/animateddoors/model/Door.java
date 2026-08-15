@@ -23,8 +23,13 @@ public class Door {
     private int hingeX;
     private int hingeZ;
 
-    /** +1 = clockwise (viewed from above), -1 = counter-clockwise. This is the opening rotation. */
+    private DoorType type = DoorType.SWING;
+
+    /** +1 = clockwise (viewed from above), -1 = counter-clockwise. Swing doors only. */
     private int quarterTurns = 1;
+
+    /** Vertical slide distance in blocks; + = up, - = down. Portcullis doors only. */
+    private int slide;
 
     private boolean open;
 
@@ -108,12 +113,33 @@ public class Door {
         this.hingeZ = hingeZ;
     }
 
+    public DoorType getType() {
+        return type;
+    }
+
+    public void setType(DoorType type) {
+        this.type = type;
+    }
+
     public int getQuarterTurns() {
         return quarterTurns;
     }
 
     public void setQuarterTurns(int quarterTurns) {
         this.quarterTurns = quarterTurns;
+    }
+
+    public int getSlide() {
+        return slide;
+    }
+
+    public void setSlide(int slide) {
+        this.slide = slide;
+    }
+
+    /** Height of the door's closed footprint in blocks. */
+    public int height() {
+        return max.y() - min.y() + 1;
     }
 
     public boolean isOpen() {

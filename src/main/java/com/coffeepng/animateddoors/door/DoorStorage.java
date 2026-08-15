@@ -2,6 +2,7 @@ package com.coffeepng.animateddoors.door;
 
 import com.coffeepng.animateddoors.model.BlockVector3;
 import com.coffeepng.animateddoors.model.Door;
+import com.coffeepng.animateddoors.model.DoorType;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -59,7 +60,10 @@ public class DoorStorage {
         if (hinge.size() >= 2) {
             door.setHinge(hinge.get(0), hinge.get(1));
         }
+        DoorType type = DoorType.fromString(sec.getString("type", "swing"));
+        door.setType(type == null ? DoorType.SWING : type);
         door.setQuarterTurns(sec.getInt("quarterTurns", 1));
+        door.setSlide(sec.getInt("slide", 0));
         door.setOpen(sec.getBoolean("open", false));
         if (sec.isList("redstone")) {
             door.setRedstoneTrigger(readVec(sec.getIntegerList("redstone")));
@@ -93,7 +97,9 @@ public class DoorStorage {
         yaml.set(base + ".min", vecList(door.getMin()));
         yaml.set(base + ".max", vecList(door.getMax()));
         yaml.set(base + ".hinge", List.of(door.getHingeX(), door.getHingeZ()));
+        yaml.set(base + ".type", door.getType().name().toLowerCase());
         yaml.set(base + ".quarterTurns", door.getQuarterTurns());
+        yaml.set(base + ".slide", door.getSlide());
         yaml.set(base + ".open", door.isOpen());
         yaml.set(base + ".redstone", door.getRedstoneTrigger() == null ? null : vecList(door.getRedstoneTrigger()));
         yaml.set(base + ".floating", door.getFloatingTrigger() == null ? null : vecList(door.getFloatingTrigger()));

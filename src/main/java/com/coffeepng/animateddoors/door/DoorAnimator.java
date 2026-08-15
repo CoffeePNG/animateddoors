@@ -3,6 +3,7 @@ package com.coffeepng.animateddoors.door;
 import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
 import com.coffeepng.animateddoors.model.BlockVector3;
 import com.coffeepng.animateddoors.model.Door;
+import com.coffeepng.animateddoors.model.DoorType;
 import com.coffeepng.animateddoors.util.BlockRotation;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -20,11 +21,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Animates a door swing using {@link BlockDisplay} entities.
+ * Animates a door using {@link BlockDisplay} entities.
  *
- * <p>Real blocks are removed for the duration of the swing and re-placed at their rotated
- * destinations when the animation finishes. Each frame the display transformation is rotated
- * around the hinge so the client interpolates a true arc between keyframes.</p>
+ * <p>Real blocks are removed for the duration of the move and re-placed at their destinations when the
+ * animation finishes. Swing doors rotate their displays around the hinge (a true arc); portcullis doors
+ * translate their displays vertically. Either way the client interpolates smoothly between keyframes.</p>
  */
 public class DoorAnimator {
 
@@ -49,16 +50,16 @@ public class DoorAnimator {
         }
 
         boolean opening = !door.isOpen();
-        int q = door.getQuarterTurns();
-        int fromQuarters = opening ? 0 : q;          // where the real blocks currently sit
-        int totalQuarters = opening ? q : -q;        // net rotation applied during this swing
+        boolean swing = door.getType() == DoorType.SWING;
 
         List<BlockData> datas = new ArrayList<>();
         List<BlockVector3> fromCells = new ArrayList<>();
         List<BlockVector3> toCells = new ArrayList<>();
 
         for (BlockVector3 closed : door.closedPositions()) {
-            BlockVector3 from = BlockRotation.rotate(closed, door.getHingeX(), door.getHingeZ(), fromQuarters);
+            BlockVector3 openPos = DoorGeometry.openPosition(door, closed);
+            BlockVector3 from = opening ? closed : openPos;   // where the real blocks currently sit
+            BlockVector3 to = opening ? openPos : closed;     // where they'll land
             Block block = world.getBlockAt(from.x(), from.y(), from.z());
             BlockData data = block.getBlockData();
             if (data.getMaterial().isAir()) {
@@ -68,8 +69,6 @@ public class DoorAnimator {
             if (plugin.isBlockFilledContainers() && isFilledContainer(block)) {
                 return ToggleResult.CONTAINER_WITH_ITEMS;
             }
-            BlockVector3 to = BlockRotation.rotate(closed, door.getHingeX(), door.getHingeZ(),
-                    opening ? q : 0);
             datas.add(data);
             fromCells.add(from);
             toCells.add(to);
@@ -80,6 +79,10 @@ public class DoorAnimator {
         }
 
         door.setAnimating(true);
+
+        // Net rotation applied to block facing over this move (0 for portcullis).
+        int openQuarters = DoorGeometry.openingQuarterTurns(door);
+        int finalQuarters = opening ? openQuarters : -openQuarters;
 
         // Remove the real blocks (no physics, so torches/water/redstone don't cascade).
         for (BlockVector3 cell : fromCells) {
@@ -107,7 +110,8 @@ public class DoorAnimator {
         int stepTicks = Math.max(1, plugin.getStepTicks());
         int duration = Math.max(stepTicks, plugin.getDurationTicks());
         int steps = Math.max(1, duration / stepTicks);
-        double targetAngle = Math.toRadians(90.0 * totalQuarters);
+        double targetAngle = Math.toRadians(90.0 * finalQuarters);        // swing
+        float slideTotal = opening ? door.getSlide() : -door.getSlide();  // portcullis
 
         new BukkitRunnable() {
             int step = 0;
@@ -118,18 +122,24 @@ public class DoorAnimator {
                 double t = (double) step / steps;
                 double eased = easeInOut(Math.min(1.0, t));
                 float angle = (float) (eased * targetAngle);
+                float dy = (float) (eased * slideTotal);
                 for (int i = 0; i < displays.size(); i++) {
                     BlockDisplay display = displays.get(i);
                     if (!display.isValid()) {
                         continue;
                     }
-                    Vector3f h = hingeRel.get(i);
-                    // Rotate the cube about the hinge relative to the display origin.
-                    // JOML rotateY(-angle) matches the clockwise (x,z)->(-z,x) convention used everywhere.
-                    Matrix4f m = new Matrix4f()
-                            .translate(h.x, h.y, h.z)
-                            .rotateY(-angle)
-                            .translate(-h.x, -h.y, -h.z);
+                    Matrix4f m;
+                    if (swing) {
+                        Vector3f h = hingeRel.get(i);
+                        // Rotate the cube about the hinge relative to the display origin.
+                        // JOML rotateY(-angle) matches the clockwise (x,z)->(-z,x) convention used everywhere.
+                        m = new Matrix4f()
+                                .translate(h.x, h.y, h.z)
+                                .rotateY(-angle)
+                                .translate(-h.x, -h.y, -h.z);
+                    } else {
+                        m = new Matrix4f().translate(0f, dy, 0f);
+                    }
                     display.setInterpolationDelay(0);
                     display.setInterpolationDuration(stepTicks);
                     display.setTransformationMatrix(m);
@@ -138,7 +148,7 @@ public class DoorAnimator {
                     cancel();
                     // Let the final interpolation land, then swap real blocks back in.
                     plugin.getServer().getScheduler().runTaskLater(plugin,
-                            () -> finish(world, displays, datas, toCells, door, opening, totalQuarters),
+                            () -> finish(world, displays, datas, toCells, door, opening, finalQuarters),
                             stepTicks + 1L);
                 }
             }
@@ -148,7 +158,7 @@ public class DoorAnimator {
     }
 
     /** True if the block is a container whose inventory is not empty. */
-    private static boolean isFilledContainer(Block block) {
+    public static boolean isFilledContainer(Block block) {
         BlockState state = block.getState(false);
         if (state instanceof Container container) {
             return !container.getInventory().isEmpty();

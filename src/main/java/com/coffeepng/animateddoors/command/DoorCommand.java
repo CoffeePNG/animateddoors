@@ -4,6 +4,7 @@ import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
 import com.coffeepng.animateddoors.model.BlockVector3;
 import com.coffeepng.animateddoors.door.ToggleResult;
 import com.coffeepng.animateddoors.model.Door;
+import com.coffeepng.animateddoors.model.DoorType;
 import com.coffeepng.animateddoors.selection.SelectionManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -25,7 +26,7 @@ public class DoorCommand implements TabExecutor {
 
     private static final List<String> SUBS = List.of(
             "help", "wand", "create", "remove", "list", "info",
-            "hinge", "direction", "trigger", "toggle", "reload");
+            "hinge", "type", "direction", "slide", "trigger", "toggle", "reload");
 
     private final AnimatedDoorsPlugin plugin;
 
@@ -48,7 +49,9 @@ public class DoorCommand implements TabExecutor {
             case "list" -> list(sender);
             case "info" -> info(sender, args);
             case "hinge" -> hinge(sender, args);
+            case "type" -> type(sender, args);
             case "direction" -> direction(sender, args);
+            case "slide" -> slide(sender, args);
             case "trigger" -> trigger(sender, args);
             case "toggle" -> toggle(sender, args);
             case "reload" -> reload(sender);
@@ -61,8 +64,10 @@ public class DoorCommand implements TabExecutor {
         msg(sender, NamedTextColor.GOLD, "AnimatedDoors commands:");
         line(sender, "/door wand", "get the selection wand");
         line(sender, "/door create <name>", "create a door from your selection");
-        line(sender, "/door hinge <name>", "set the hinge to the block you're looking at");
-        line(sender, "/door direction <name> <cw|ccw>", "set the opening direction");
+        line(sender, "/door type <name> <swing|portcullis>", "choose swing or vertical-slide motion");
+        line(sender, "/door hinge <name>", "(swing) set the hinge to the block you're looking at");
+        line(sender, "/door direction <name> <cw|ccw>", "(swing) set the opening direction");
+        line(sender, "/door slide <name> <blocks>", "(portcullis) set vertical distance (+up / -down)");
         line(sender, "/door trigger <name> redstone", "bind the block you're looking at as a redstone trigger");
         line(sender, "/door trigger <name> float", "place a floating click-trigger at the block you're looking at");
         line(sender, "/door trigger <name> clear", "remove this door's triggers");
@@ -109,6 +114,13 @@ public class DoorCommand implements TabExecutor {
         plugin.getSelectionManager().clear(player.getUniqueId());
         msg(sender, NamedTextColor.GREEN, "Created door '" + name + "'. Hinge defaults to its min corner; "
                 + "set it with /door hinge " + name + " and pick a direction with /door direction " + name + " cw|ccw.");
+
+        int filled = countFilledContainers(player.getWorld(), sel.min(), sel.max());
+        if (filled > 0) {
+            msg(sender, NamedTextColor.GOLD, "Heads up: this selection contains " + filled
+                    + " container(s) with items. Door contents aren't preserved when it moves, so the door "
+                    + "will refuse to move until they're emptied (see restrictions.block-filled-containers).");
+        }
     }
 
     private void remove(CommandSender sender, String[] args) {
@@ -151,8 +163,15 @@ public class DoorCommand implements TabExecutor {
         msg(sender, NamedTextColor.GOLD, "Door '" + door.getName() + "':");
         msg(sender, NamedTextColor.YELLOW, "  world: " + door.getWorld());
         msg(sender, NamedTextColor.YELLOW, "  min: " + vec(door.getMin()) + "  max: " + vec(door.getMax()));
-        msg(sender, NamedTextColor.YELLOW, "  hinge: " + door.getHingeX() + ", " + door.getHingeZ());
-        msg(sender, NamedTextColor.YELLOW, "  direction: " + (door.getQuarterTurns() >= 0 ? "clockwise" : "counter-clockwise"));
+        msg(sender, NamedTextColor.YELLOW, "  type: " + door.getType().name().toLowerCase());
+        if (door.getType() == DoorType.SWING) {
+            msg(sender, NamedTextColor.YELLOW, "  hinge: " + door.getHingeX() + ", " + door.getHingeZ());
+            msg(sender, NamedTextColor.YELLOW, "  direction: "
+                    + (door.getQuarterTurns() >= 0 ? "clockwise" : "counter-clockwise"));
+        } else {
+            msg(sender, NamedTextColor.YELLOW, "  slide: " + Math.abs(door.getSlide()) + " block(s) "
+                    + (door.getSlide() >= 0 ? "up" : "down"));
+        }
         msg(sender, NamedTextColor.YELLOW, "  state: " + (door.isOpen() ? "open" : "closed"));
         msg(sender, NamedTextColor.YELLOW, "  redstone trigger: "
                 + (door.getRedstoneTrigger() == null ? "none" : vec(door.getRedstoneTrigger())));
@@ -207,6 +226,86 @@ public class DoorCommand implements TabExecutor {
         plugin.saveDoors();
         msg(sender, NamedTextColor.GREEN, "Direction for '" + door.getName() + "' set to "
                 + (door.getQuarterTurns() >= 0 ? "clockwise" : "counter-clockwise") + ".");
+    }
+
+    private void type(CommandSender sender, String[] args) {
+        if (!requireAdmin(sender)) {
+            return;
+        }
+        if (args.length < 3) {
+            msg(sender, NamedTextColor.RED, "Usage: /door type <name> <swing|portcullis>");
+            return;
+        }
+        Door door = resolve(sender, args);
+        if (door == null) {
+            return;
+        }
+        DoorType type = DoorType.fromString(args[2]);
+        if (type == null) {
+            msg(sender, NamedTextColor.RED, "Type must be 'swing' or 'portcullis'.");
+            return;
+        }
+        door.setType(type);
+        if (type == DoorType.PORTCULLIS && door.getSlide() == 0) {
+            // Default: retract straight up by the door's own height.
+            door.setSlide(door.height());
+        }
+        plugin.saveDoors();
+        if (type == DoorType.PORTCULLIS) {
+            msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' is now a portcullis, sliding "
+                    + Math.abs(door.getSlide()) + " block(s) " + (door.getSlide() >= 0 ? "up" : "down")
+                    + ". Adjust with /door slide " + door.getName() + " <blocks>.");
+        } else {
+            msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' is now a swing door. "
+                    + "Set the hinge and direction with /door hinge and /door direction.");
+        }
+    }
+
+    private void slide(CommandSender sender, String[] args) {
+        if (!requireAdmin(sender)) {
+            return;
+        }
+        if (args.length < 3) {
+            msg(sender, NamedTextColor.RED, "Usage: /door slide <name> <blocks>  (positive = up, negative = down)");
+            return;
+        }
+        Door door = resolve(sender, args);
+        if (door == null) {
+            return;
+        }
+        int blocks;
+        try {
+            blocks = Integer.parseInt(args[2]);
+        } catch (NumberFormatException ex) {
+            msg(sender, NamedTextColor.RED, "Slide distance must be a whole number of blocks.");
+            return;
+        }
+        if (blocks == 0) {
+            msg(sender, NamedTextColor.RED, "Slide distance can't be 0.");
+            return;
+        }
+        door.setSlide(blocks);
+        if (door.getType() != DoorType.PORTCULLIS) {
+            door.setType(DoorType.PORTCULLIS);
+        }
+        plugin.saveDoors();
+        msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' will slide " + Math.abs(blocks)
+                + " block(s) " + (blocks >= 0 ? "up" : "down") + ".");
+    }
+
+    private int countFilledContainers(org.bukkit.World world, BlockVector3 min, BlockVector3 max) {
+        int count = 0;
+        for (int x = min.x(); x <= max.x(); x++) {
+            for (int y = min.y(); y <= max.y(); y++) {
+                for (int z = min.z(); z <= max.z(); z++) {
+                    if (com.coffeepng.animateddoors.door.DoorAnimator
+                            .isFilledContainer(world.getBlockAt(x, y, z))) {
+                        count++;
+                    }
+                }
+            }
+        }
+        return count;
     }
 
     private void trigger(CommandSender sender, String[] args) {
@@ -328,10 +427,13 @@ public class DoorCommand implements TabExecutor {
             return filter(SUBS, args[0]);
         }
         String sub = args[0].toLowerCase(Locale.ROOT);
-        if (args.length == 2 && List.of("remove", "info", "hinge", "direction", "trigger", "toggle").contains(sub)) {
+        if (args.length == 2 && List.of("remove", "info", "hinge", "type", "direction", "slide", "trigger", "toggle").contains(sub)) {
             List<String> names = new ArrayList<>();
             plugin.getDoorManager().all().forEach(d -> names.add(d.getName()));
             return filter(names, args[1]);
+        }
+        if (args.length == 3 && sub.equals("type")) {
+            return filter(List.of("swing", "portcullis"), args[2]);
         }
         if (args.length == 3 && sub.equals("direction")) {
             return filter(List.of("cw", "ccw"), args[2]);

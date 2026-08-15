@@ -2,7 +2,6 @@ package com.coffeepng.animateddoors.door;
 
 import com.coffeepng.animateddoors.model.BlockVector3;
 import com.coffeepng.animateddoors.model.Door;
-import com.coffeepng.animateddoors.util.BlockRotation;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -69,7 +68,7 @@ public class DoorManager {
         }
         List<BlockVector3> out = new ArrayList<>(closed.size());
         for (BlockVector3 pos : closed) {
-            out.add(BlockRotation.rotate(pos, door.getHingeX(), door.getHingeZ(), door.getQuarterTurns()));
+            out.add(DoorGeometry.openPosition(door, pos));
         }
         return out;
     }
