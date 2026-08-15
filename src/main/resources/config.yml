@@ -1,0 +1,18 @@
+# AnimatedDoors configuration
+
+animation:
+  # Total time the door takes to swing open/closed, in server ticks (20 ticks = 1 second).
+  duration-ticks: 40
+  # How many ticks between each animation keyframe. Lower = smoother but more work.
+  # Must divide reasonably into duration-ticks. 2 is a good default.
+  step-ticks: 2
+
+triggers:
+  # Right-clicking any block that belongs to a door toggles it (requires animateddoors.toggle).
+  click-door-to-toggle: true
+  # Cooldown (in ticks) before the same door can be toggled again. Prevents redstone spam / double-fires.
+  cooldown-ticks: 10
+
+selection:
+  # Material of the selection wand given by /door wand.
+  wand-material: BLAZE_ROD
