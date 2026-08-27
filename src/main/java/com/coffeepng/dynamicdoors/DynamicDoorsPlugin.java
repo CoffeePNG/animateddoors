@@ -25,7 +25,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class DynamicDoorsPlugin extends JavaPlugin {
@@ -38,6 +40,9 @@ public class DynamicDoorsPlugin extends JavaPlugin {
     private PhysicsGuard physicsGuard;
 
     private NamespacedKey doorKey;
+
+    /** The door each player is currently working on, so commands don't need a name every time. */
+    private final Map<UUID, UUID> activeDoors = new HashMap<>();
 
     private int durationTicks;
     private int stepTicks;
@@ -459,6 +464,37 @@ public class DynamicDoorsPlugin extends JavaPlugin {
                     net.kyori.adventure.text.format.NamedTextColor.GRAY));
         }
         return true;
+    }
+
+    // ---- Active door -------------------------------------------------------
+
+    /** Remember the door this player is working on. */
+    public void setActiveDoor(Player player, Door door) {
+        activeDoors.put(player.getUniqueId(), door.getId());
+    }
+
+    /** The door this player selected with /door select, or null if none (or it was removed). */
+    public Door getActiveDoor(Player player) {
+        UUID doorId = activeDoors.get(player.getUniqueId());
+        if (doorId == null) {
+            return null;
+        }
+        for (Door door : doorManager.all()) {
+            if (door.getId().equals(doorId)) {
+                return door;
+            }
+        }
+        activeDoors.remove(player.getUniqueId());
+        return null;
+    }
+
+    public void clearActiveDoor(Player player) {
+        activeDoors.remove(player.getUniqueId());
+    }
+
+    /** Forget a door everyone had selected — called when it is deleted. */
+    public void forgetDoor(Door door) {
+        activeDoors.values().removeIf(id -> id.equals(door.getId()));
     }
 
     /** The door whose power block sits at this position, if any. */

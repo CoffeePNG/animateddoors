@@ -77,6 +77,18 @@ by one.
   sit where the door would land and would be overwritten by a real toggle.
 - The outline also refreshes automatically after each wand click (turn it off with `preview.enabled`).
 
+### Working on one door
+
+Typing the door's name into every command gets old fast. `/door select mygate` picks a door to work on,
+and from then on you can leave the name off: `/door hinge`, `/door direction cw`, `/door preview`,
+`/door toggle`, and so on all apply to it. Creating a door with `/door create` selects it automatically,
+and passing a name to any command switches the selection to that door.
+
+`/door select` on its own reports what's selected, `/door select none` clears it. Two details worth
+knowing: `/door remove` always wants the name spelled out, since deleting the wrong door by accident is
+no fun; and a name always wins over a value, so if you ever name a door `cw`, `/door direction cw` will
+be read as "switch to the door called cw".
+
 ### Fixing an existing door
 
 `/door edit <name>` loads a door's blocks back into your selection (in block mode, outlined), so you can
@@ -106,6 +118,7 @@ back to the door. Both require the door to be closed.
 
 | Command | Description |
 | --- | --- |
+| `/door select <name>` | Work on this door; other commands can then omit the name |
 | `/door wand` | Get the selection wand |
 | `/door mode <block\|region>` | Pick blocks one by one, or use a two-corner box |
 | `/door add` | Add the wand's corner box to your picks (skips air) |

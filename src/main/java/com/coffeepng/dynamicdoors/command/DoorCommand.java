@@ -30,7 +30,7 @@ public class DoorCommand implements TabExecutor {
 
     private static final List<String> SUBS = List.of(
             "help", "wand", "mode", "add", "sub", "clear", "finish", "create", "edit", "update",
-            "preview", "remove", "list", "info", "hinge", "type", "direction", "slide",
+            "select", "preview", "remove", "list", "info", "hinge", "type", "direction", "slide",
             "powerblock", "trigger", "toggle", "reload");
 
     /** How far away a builder can point at a hinge block. */
@@ -57,6 +57,7 @@ public class DoorCommand implements TabExecutor {
             case "sub", "subtract" -> regionInto(sender, false);
             case "clear" -> clear(sender);
             case "finish", "done" -> finish(sender);
+            case "select", "use" -> select(sender, args);
             case "create" -> create(sender, args);
             case "edit" -> edit(sender, args);
             case "update" -> update(sender, args);
@@ -86,6 +87,7 @@ public class DoorCommand implements TabExecutor {
         line(sender, "/door finish", "preview exactly which blocks will move");
         line(sender, "/door clear", "clear your selection");
         msg(sender, NamedTextColor.GOLD, "DynamicDoors — doors:");
+        line(sender, "/door select <name>", "work on this door; other commands can then omit the name");
         line(sender, "/door create <name>", "create a door from your selection");
         line(sender, "/door edit <name>", "load a door's blocks back into your selection");
         line(sender, "/door update <name>", "replace a door's blocks with your selection");
@@ -231,6 +233,7 @@ public class DoorCommand implements TabExecutor {
         Door door = new Door(UUID.randomUUID(), name, player.getWorld().getName(), cells);
         plugin.getDoorManager().add(door);
         plugin.saveDoors();
+        plugin.setActiveDoor(player, door);
         plugin.getSelectionManager().clear(player.getUniqueId());
         plugin.getPreviewManager().showSelection(player, player.getWorld(), cells,
                 PreviewManager.SELECTION_COLOR, plugin.getPreviewTicks());
@@ -245,10 +248,11 @@ public class DoorCommand implements TabExecutor {
         if (!requireAdmin(sender) || !(sender instanceof Player player)) {
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        Target subject = target(sender, args);
+        if (subject == null) {
             return;
         }
+        Door door = subject.door();
         if (door.isOpen()) {
             msg(sender, NamedTextColor.RED, "Close '" + door.getName() + "' first — blocks are stored in the closed layout.");
             return;
@@ -275,10 +279,11 @@ public class DoorCommand implements TabExecutor {
         if (!requireAdmin(sender) || !(sender instanceof Player player)) {
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        Target subject = target(sender, args);
+        if (subject == null) {
             return;
         }
+        Door door = subject.door();
         if (door.isOpen()) {
             msg(sender, NamedTextColor.RED, "Close '" + door.getName() + "' first — blocks are stored in the closed layout.");
             return;
@@ -310,13 +315,15 @@ public class DoorCommand implements TabExecutor {
         if (!requireUse(sender) || !(sender instanceof Player player)) {
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        Target subject = target(sender, args);
+        if (subject == null) {
             return;
         }
+        Door door = subject.door();
+        String[] rest = subject.rest();
         boolean opening = !door.isOpen();
-        if (args.length >= 3) {
-            String want = args[2].toLowerCase(Locale.ROOT);
+        if (rest.length >= 1) {
+            String want = rest[0].toLowerCase(Locale.ROOT);
             switch (want) {
                 case "open", "opening" -> opening = true;
                 case "close", "closing", "shut" -> opening = false;
@@ -407,11 +414,18 @@ public class DoorCommand implements TabExecutor {
         if (!requireAdmin(sender)) {
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        // Deleting is the one thing that always wants the name spelled out.
+        if (args.length < 2) {
+            msg(sender, NamedTextColor.RED, "Name the door to delete: /door remove <name>.");
             return;
         }
+        Target subject = target(sender, args);
+        if (subject == null) {
+            return;
+        }
+        Door door = subject.door();
         plugin.removeFloatingTrigger(door);
+        plugin.forgetDoor(door);
         plugin.getDoorManager().remove(door);
         plugin.saveDoors();
         msg(sender, NamedTextColor.GREEN, "Removed door '" + door.getName() + "'.");
@@ -436,10 +450,11 @@ public class DoorCommand implements TabExecutor {
         if (!requireUse(sender)) {
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        Target subject = target(sender, args);
+        if (subject == null) {
             return;
         }
+        Door door = subject.door();
         BlockVector3 min = door.getMin();
         BlockVector3 max = door.getMax();
         long boxCells = (long) (max.x() - min.x() + 1) * (max.y() - min.y() + 1) * (max.z() - min.z() + 1);
@@ -475,23 +490,25 @@ public class DoorCommand implements TabExecutor {
         if (!requireAdmin(sender) || !(sender instanceof Player player)) {
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        Target subject = target(sender, args);
+        if (subject == null) {
             return;
         }
+        Door door = subject.door();
+        String[] rest = subject.rest();
 
         Integer x = null;
         Integer z = null;
-        if (args.length >= 4) {
+        if (rest.length >= 2) {
             try {
-                x = Integer.parseInt(args[2]);
-                z = Integer.parseInt(args[3]);
+                x = Integer.parseInt(rest[0]);
+                z = Integer.parseInt(rest[1]);
             } catch (NumberFormatException ex) {
                 msg(sender, NamedTextColor.RED, "Usage: /door hinge " + door.getName() + " [here|show|<x> <z>]");
                 return;
             }
-        } else if (args.length == 3) {
-            String what = args[2].toLowerCase(Locale.ROOT);
+        } else if (rest.length == 1) {
+            String what = rest[0].toLowerCase(Locale.ROOT);
             switch (what) {
                 case "show", "where" -> {
                     showHinge(sender, player, door);
@@ -569,15 +586,17 @@ public class DoorCommand implements TabExecutor {
         if (!requireAdmin(sender)) {
             return;
         }
-        if (args.length < 3) {
-            msg(sender, NamedTextColor.RED, "Usage: /door direction <name> <cw|ccw>");
+        Target subject = target(sender, args);
+        if (subject == null) {
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        Door door = subject.door();
+        String[] rest = subject.rest();
+        if (rest.length < 1) {
+            msg(sender, NamedTextColor.RED, "Usage: /door direction [name] <cw|ccw>");
             return;
         }
-        String dir = args[2].toLowerCase(Locale.ROOT);
+        String dir = rest[0].toLowerCase(Locale.ROOT);
         switch (dir) {
             case "cw", "clockwise" -> door.setQuarterTurns(1);
             case "ccw", "counter", "counterclockwise" -> door.setQuarterTurns(-1);
@@ -595,15 +614,17 @@ public class DoorCommand implements TabExecutor {
         if (!requireAdmin(sender)) {
             return;
         }
-        if (args.length < 3) {
-            msg(sender, NamedTextColor.RED, "Usage: /door type <name> <swing|portcullis>");
+        Target subject = target(sender, args);
+        if (subject == null) {
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        Door door = subject.door();
+        String[] rest = subject.rest();
+        if (rest.length < 1) {
+            msg(sender, NamedTextColor.RED, "Usage: /door type [name] <swing|portcullis>");
             return;
         }
-        DoorType type = DoorType.fromString(args[2]);
+        DoorType type = DoorType.fromString(rest[0]);
         if (type == null) {
             msg(sender, NamedTextColor.RED, "Type must be 'swing' or 'portcullis'.");
             return;
@@ -628,17 +649,19 @@ public class DoorCommand implements TabExecutor {
         if (!requireAdmin(sender)) {
             return;
         }
-        if (args.length < 3) {
-            msg(sender, NamedTextColor.RED, "Usage: /door slide <name> <blocks>  (positive = up, negative = down)");
+        Target subject = target(sender, args);
+        if (subject == null) {
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        Door door = subject.door();
+        String[] rest = subject.rest();
+        if (rest.length < 1) {
+            msg(sender, NamedTextColor.RED, "Usage: /door slide [name] <blocks>  (positive = up, negative = down)");
             return;
         }
         int blocks;
         try {
-            blocks = Integer.parseInt(args[2]);
+            blocks = Integer.parseInt(rest[0]);
         } catch (NumberFormatException ex) {
             msg(sender, NamedTextColor.RED, "Slide distance must be a whole number of blocks.");
             return;
@@ -661,11 +684,13 @@ public class DoorCommand implements TabExecutor {
         if (!requireAdmin(sender) || !(sender instanceof Player player)) {
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        Target subject = target(sender, args);
+        if (subject == null) {
             return;
         }
-        String action = args.length >= 3 ? args[2].toLowerCase(Locale.ROOT) : "set";
+        Door door = subject.door();
+        String[] rest = subject.rest();
+        String action = rest.length >= 1 ? rest[0].toLowerCase(Locale.ROOT) : "set";
         switch (action) {
             case "clear", "remove", "none" -> {
                 door.setPowerBlock(null);
@@ -724,15 +749,17 @@ public class DoorCommand implements TabExecutor {
         if (!requireAdmin(sender) || !(sender instanceof Player player)) {
             return;
         }
-        if (args.length < 3) {
-            msg(sender, NamedTextColor.RED, "Usage: /door trigger <name> <redstone|float|clear>");
+        Target subject = target(sender, args);
+        if (subject == null) {
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        Door door = subject.door();
+        String[] rest = subject.rest();
+        if (rest.length < 1) {
+            msg(sender, NamedTextColor.RED, "Usage: /door trigger [name] <redstone|float|clear>");
             return;
         }
-        String type = args[2].toLowerCase(Locale.ROOT);
+        String type = rest[0].toLowerCase(Locale.ROOT);
         switch (type) {
             case "redstone" -> {
                 Block target = player.getTargetBlockExact(6);
@@ -771,10 +798,11 @@ public class DoorCommand implements TabExecutor {
             msg(sender, NamedTextColor.RED, "You don't have permission to toggle doors.");
             return;
         }
-        Door door = resolve(sender, args);
-        if (door == null) {
+        Target subject = target(sender, args);
+        if (subject == null) {
             return;
         }
+        Door door = subject.door();
         ToggleResult result = plugin.attemptToggle(door, sender instanceof Player player ? player : null);
         if (result != ToggleResult.STARTED) {
             msg(sender, NamedTextColor.GRAY, result.message());
@@ -791,17 +819,80 @@ public class DoorCommand implements TabExecutor {
 
     // ---- helpers -----------------------------------------------------------
 
-    private Door resolve(CommandSender sender, String[] args) {
+    /** A resolved door plus the arguments that follow it. */
+    private record Target(Door door, String[] rest) {
+    }
+
+    /**
+     * Work out which door a command is about.
+     *
+     * <p>A name may be given as the first argument, and doing so also makes that door the player's
+     * selected one. Leave it out and the command applies to whatever {@code /door select} chose, so
+     * a run of edits doesn't repeat the name. Anything after the name (or all of it, when the name
+     * is omitted) is handed back as {@code rest} for the subcommand's own arguments.</p>
+     *
+     * @return the target, or null if none could be resolved (a message has been sent)
+     */
+    private Target target(CommandSender sender, String[] args) {
+        Player player = sender instanceof Player p ? p : null;
+        if (args.length >= 2) {
+            Optional<Door> named = plugin.getDoorManager().byName(args[1]);
+            if (named.isPresent()) {
+                if (player != null) {
+                    plugin.setActiveDoor(player, named.get());
+                }
+                return new Target(named.get(), java.util.Arrays.copyOfRange(args, 2, args.length));
+            }
+        }
+        Door active = player == null ? null : plugin.getActiveDoor(player);
+        if (active != null) {
+            // No name matched, so everything after the subcommand belongs to the subcommand.
+            return new Target(active, java.util.Arrays.copyOfRange(args, 1, args.length));
+        }
+        if (args.length >= 2) {
+            msg(sender, NamedTextColor.RED, "No door named '" + args[1] + "'"
+                    + (player == null ? "." : ", and no door selected. Pick one with /door select <name>."));
+        } else {
+            msg(sender, NamedTextColor.RED, "Which door? Give a name, or select one with /door select <name>.");
+        }
+        return null;
+    }
+
+    /** Choose the door that later commands apply to by default. */
+    private void select(CommandSender sender, String[] args) {
+        if (!requireUse(sender) || !(sender instanceof Player player)) {
+            return;
+        }
         if (args.length < 2) {
-            msg(sender, NamedTextColor.RED, "Usage: /door " + args[0] + " <name>");
-            return null;
+            Door active = plugin.getActiveDoor(player);
+            if (active == null) {
+                msg(sender, NamedTextColor.GRAY, "No door selected. /door select <name> picks one; "
+                        + "after that you can leave the name off other commands.");
+            } else {
+                msg(sender, NamedTextColor.GOLD, "Selected door: " + active.getName()
+                        + " (" + active.blockCount() + " blocks, " + (active.isOpen() ? "open" : "closed") + ")");
+            }
+            return;
         }
-        Optional<Door> door = plugin.getDoorManager().byName(args[1]);
+        String name = args[1];
+        if (name.equalsIgnoreCase("none") || name.equalsIgnoreCase("clear")) {
+            plugin.clearActiveDoor(player);
+            msg(sender, NamedTextColor.GREEN, "Door selection cleared.");
+            return;
+        }
+        Optional<Door> door = plugin.getDoorManager().byName(name);
         if (door.isEmpty()) {
-            msg(sender, NamedTextColor.RED, "No door named '" + args[1] + "'.");
-            return null;
+            msg(sender, NamedTextColor.RED, "No door named '" + name + "'.");
+            return;
         }
-        return door.get();
+        plugin.setActiveDoor(player, door.get());
+        msg(sender, NamedTextColor.GREEN, "Working on '" + door.get().getName()
+                + "'. Other commands can now leave the name off — /door toggle, /door hinge, /door preview, …");
+        World world = plugin.getServer().getWorld(door.get().getWorld());
+        if (world != null) {
+            plugin.getPreviewManager().showSelection(player, world, door.get().closedPositions(),
+                    PreviewManager.SELECTION_COLOR, plugin.getPreviewTicks());
+        }
     }
 
     private boolean requireAdmin(CommandSender sender) {
@@ -836,33 +927,37 @@ public class DoorCommand implements TabExecutor {
         }
         String sub = args[0].toLowerCase(Locale.ROOT);
         if (args.length == 2 && List.of("remove", "info", "hinge", "type", "direction", "slide",
-                "trigger", "toggle", "preview", "edit", "update", "powerblock").contains(sub)) {
-            List<String> names = new ArrayList<>();
-            plugin.getDoorManager().all().forEach(d -> names.add(d.getName()));
-            return filter(names, args[1]);
+                "trigger", "toggle", "preview", "edit", "update", "powerblock", "select").contains(sub)) {
+            List<String> options = new ArrayList<>();
+            plugin.getDoorManager().all().forEach(d -> options.add(d.getName()));
+            if (sub.equals("select")) {
+                options.add("none");
+            } else {
+                // The name is optional when a door is selected, so offer this subcommand's values too.
+                options.addAll(valuesFor(sub));
+            }
+            return filter(options, args[1]);
         }
         if (args.length == 2 && sub.equals("mode")) {
             return filter(List.of("block", "region"), args[1]);
         }
-        if (args.length == 3 && sub.equals("type")) {
-            return filter(List.of("swing", "portcullis"), args[2]);
-        }
-        if (args.length == 3 && sub.equals("direction")) {
-            return filter(List.of("cw", "ccw"), args[2]);
-        }
-        if (args.length == 3 && sub.equals("trigger")) {
-            return filter(List.of("redstone", "float", "clear"), args[2]);
-        }
-        if (args.length == 3 && sub.equals("hinge")) {
-            return filter(List.of("here", "show"), args[2]);
-        }
-        if (args.length == 3 && sub.equals("powerblock")) {
-            return filter(List.of("wand", "clear", "show"), args[2]);
-        }
-        if (args.length == 3 && sub.equals("preview")) {
-            return filter(List.of("open", "close"), args[2]);
+        if (args.length == 3) {
+            return filter(valuesFor(sub), args[2]);
         }
         return List.of();
+    }
+
+    /** The non-name arguments a subcommand accepts, offered when the door name is left off. */
+    private static List<String> valuesFor(String sub) {
+        return switch (sub) {
+            case "type" -> List.of("swing", "portcullis");
+            case "direction" -> List.of("cw", "ccw");
+            case "trigger" -> List.of("redstone", "float", "clear");
+            case "hinge" -> List.of("here", "show");
+            case "powerblock" -> List.of("wand", "clear", "show");
+            case "preview" -> List.of("open", "close");
+            default -> List.of();
+        };
     }
 
     private static List<String> filter(List<String> options, String prefix) {
