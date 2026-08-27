@@ -5,6 +5,7 @@ import com.coffeepng.animateddoors.door.DoorAnimator;
 import com.coffeepng.animateddoors.door.DoorManager;
 import com.coffeepng.animateddoors.door.DoorStorage;
 import com.coffeepng.animateddoors.door.ToggleResult;
+import com.coffeepng.animateddoors.listener.PowerBlockListener;
 import com.coffeepng.animateddoors.listener.RedstoneListener;
 import com.coffeepng.animateddoors.listener.PlayerListener;
 import com.coffeepng.animateddoors.model.BlockVector3;
@@ -13,6 +14,7 @@ import com.coffeepng.animateddoors.preview.PreviewManager;
 import com.coffeepng.animateddoors.selection.SelectionManager;
 import com.coffeepng.animateddoors.selection.SelectionMode;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
@@ -39,7 +41,12 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
     private int cooldownTicks;
     private boolean clickToToggle;
     private boolean blockFilledContainers;
+    private boolean blockOnObstruction;
     private String wandMaterial;
+    private Material powerBlockMaterial;
+    private boolean requirePowerBlockMaterial;
+    private boolean protectPowerBlocks;
+    private boolean clickPowerBlock;
     private boolean previewEnabled;
     private int previewTicks;
     private int previewLiveTicks;
@@ -67,6 +74,7 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
         getServer().getPluginManager().registerEvents(new RedstoneListener(this), this);
+        getServer().getPluginManager().registerEvents(new PowerBlockListener(this), this);
 
         // Rebuild floating triggers once worlds are guaranteed to be loaded.
         getServer().getScheduler().runTaskLater(this, this::rebuildFloatingTriggers, 20L);
@@ -98,12 +106,40 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
         this.cooldownTicks = getConfig().getInt("triggers.cooldown-ticks", 10);
         this.clickToToggle = getConfig().getBoolean("triggers.click-door-to-toggle", true);
         this.blockFilledContainers = getConfig().getBoolean("restrictions.block-filled-containers", true);
+        this.blockOnObstruction = readObstructionPolicy();
+        this.powerBlockMaterial = readPowerBlockMaterial();
+        this.requirePowerBlockMaterial = getConfig().getBoolean("power-block.require-material", true);
+        this.protectPowerBlocks = getConfig().getBoolean("power-block.protect", true);
+        this.clickPowerBlock = getConfig().getBoolean("power-block.click-to-toggle", true);
         this.wandMaterial = getConfig().getString("selection.wand-material", "BLAZE_ROD");
         this.previewEnabled = getConfig().getBoolean("preview.enabled", true);
         this.previewTicks = getConfig().getInt("preview.duration-ticks", 200);
         this.previewLiveTicks = getConfig().getInt("preview.live-duration-ticks", 100);
         this.previewHoldTicks = getConfig().getInt("preview.hold-ticks", 40);
         this.previewMaxBlocks = getConfig().getInt("preview.max-blocks", 2000);
+    }
+
+    /** true = refuse to move when something is in the way; false = overwrite it. */
+    private boolean readObstructionPolicy() {
+        String raw = getConfig().getString("restrictions.obstruction", "block");
+        return switch (raw == null ? "block" : raw.toLowerCase(java.util.Locale.ROOT)) {
+            case "overwrite", "replace", "ignore" -> false;
+            case "block", "refuse", "cancel" -> true;
+            default -> {
+                getLogger().warning("restrictions.obstruction must be 'block' or 'overwrite'; using block.");
+                yield true;
+            }
+        };
+    }
+
+    private Material readPowerBlockMaterial() {
+        String raw = getConfig().getString("power-block.material", "GOLD_BLOCK");
+        Material material = Material.matchMaterial(raw == null ? "GOLD_BLOCK" : raw);
+        if (material == null || !material.isBlock()) {
+            getLogger().warning("power-block.material '" + raw + "' is not a block; using GOLD_BLOCK.");
+            return Material.GOLD_BLOCK;
+        }
+        return material;
     }
 
     private SelectionMode readDefaultSelectionMode() {
@@ -225,6 +261,28 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
      * @return the outcome; {@link ToggleResult#STARTED} means the swing began.
      */
     public ToggleResult attemptToggle(Door door) {
+        return attemptToggle(door, null);
+    }
+
+    /**
+     * Toggle a door on behalf of a player, showing them why if it refuses.
+     *
+     * @param actor the player who triggered it, or null for redstone/console
+     */
+    public ToggleResult attemptToggle(Door door, Player actor) {
+        ToggleResult result = attemptToggleInternal(door);
+        if (result == ToggleResult.OBSTRUCTED && actor != null) {
+            int blocked = previewManager.showObstructions(actor, door, previewTicks);
+            actor.sendMessage(net.kyori.adventure.text.Component.text(
+                    blocked + " block(s) are standing where '" + door.getName()
+                            + "' would land (glowing red). Clear them, or set restrictions.obstruction "
+                            + "to 'overwrite' to let the door break them.",
+                    net.kyori.adventure.text.format.NamedTextColor.RED));
+        }
+        return result;
+    }
+
+    private ToggleResult attemptToggleInternal(Door door) {
         long tick = getServer().getCurrentTick();
         if (door.isAnimating()) {
             return ToggleResult.BUSY;
@@ -299,6 +357,37 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
 
     public boolean isBlockFilledContainers() {
         return blockFilledContainers;
+    }
+
+    /** True when a door refuses to move rather than overwriting blocks in its way. */
+    public boolean isBlockOnObstruction() {
+        return blockOnObstruction;
+    }
+
+    public Material getPowerBlockMaterial() {
+        return powerBlockMaterial;
+    }
+
+    public boolean requiresPowerBlockMaterial() {
+        return requirePowerBlockMaterial;
+    }
+
+    public boolean isProtectPowerBlocks() {
+        return protectPowerBlocks;
+    }
+
+    public boolean isClickPowerBlock() {
+        return clickPowerBlock;
+    }
+
+    /** The door whose power block sits at this position, if any. */
+    public Door powerBlockOwner(String world, BlockVector3 pos) {
+        for (Door door : doorManager.all()) {
+            if (door.getWorld().equals(world) && pos.equals(door.getPowerBlock())) {
+                return door;
+            }
+        }
+        return null;
     }
 
     public String getWandMaterial() {

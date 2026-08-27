@@ -31,7 +31,7 @@ public class DoorCommand implements TabExecutor {
     private static final List<String> SUBS = List.of(
             "help", "wand", "mode", "add", "sub", "clear", "finish", "create", "edit", "update",
             "preview", "remove", "list", "info", "hinge", "type", "direction", "slide",
-            "trigger", "toggle", "reload");
+            "powerblock", "trigger", "toggle", "reload");
 
     private final AnimatedDoorsPlugin plugin;
 
@@ -65,6 +65,7 @@ public class DoorCommand implements TabExecutor {
             case "type" -> type(sender, args);
             case "direction" -> direction(sender, args);
             case "slide" -> slide(sender, args);
+            case "powerblock", "power" -> powerBlock(sender, args);
             case "trigger" -> trigger(sender, args);
             case "toggle" -> toggle(sender, args);
             case "reload" -> reload(sender);
@@ -90,6 +91,7 @@ public class DoorCommand implements TabExecutor {
         line(sender, "/door hinge <name>", "(swing) set the hinge to the block you're looking at");
         line(sender, "/door direction <name> <cw|ccw>", "(swing) set the opening direction");
         line(sender, "/door slide <name> <blocks>", "(portcullis) set vertical distance (+up / -down)");
+        line(sender, "/door powerblock <name> [clear|show]", "bind/clear/locate the door's power block");
         line(sender, "/door trigger <name> redstone", "bind the block you're looking at as a redstone trigger");
         line(sender, "/door trigger <name> float", "place a floating click-trigger at the block you're looking at");
         line(sender, "/door trigger <name> clear", "remove this door's triggers");
@@ -323,8 +325,10 @@ public class DoorCommand implements TabExecutor {
                 + " with " + ghosts + " block(s). No real blocks are touched.");
         List<BlockVector3> blocked = plugin.getPreviewManager().obstructions(door);
         if (!blocked.isEmpty()) {
-            msg(sender, NamedTextColor.GOLD, "Heads up: " + blocked.size()
-                    + " block(s) sit where this door would land and would be overwritten by a real toggle.");
+            msg(sender, NamedTextColor.GOLD, "Heads up: " + blocked.size() + " block(s) sit where this door lands — "
+                    + (plugin.isBlockOnObstruction()
+                        ? "it will refuse to move until they're cleared."
+                        : "a real toggle would overwrite them (restrictions.obstruction = overwrite)."));
         }
     }
 
@@ -443,6 +447,8 @@ public class DoorCommand implements TabExecutor {
                     + (door.getSlide() >= 0 ? "up" : "down"));
         }
         msg(sender, NamedTextColor.YELLOW, "  state: " + (door.isOpen() ? "open" : "closed"));
+        msg(sender, NamedTextColor.YELLOW, "  power block: "
+                + (door.getPowerBlock() == null ? "none" : door.getPowerBlock().toString()));
         msg(sender, NamedTextColor.YELLOW, "  redstone trigger: "
                 + (door.getRedstoneTrigger() == null ? "none" : door.getRedstoneTrigger().toString()));
         msg(sender, NamedTextColor.YELLOW, "  floating trigger: "
@@ -565,6 +571,90 @@ public class DoorCommand implements TabExecutor {
         msg(sender, NamedTextColor.GRAY, "See it move with /door preview " + door.getName() + ".");
     }
 
+    private void powerBlock(CommandSender sender, String[] args) {
+        if (!requireAdmin(sender) || !(sender instanceof Player player)) {
+            return;
+        }
+        Door door = resolve(sender, args);
+        if (door == null) {
+            return;
+        }
+        String action = args.length >= 3 ? args[2].toLowerCase(Locale.ROOT) : "set";
+        switch (action) {
+            case "clear", "remove", "none" -> {
+                door.setPowerBlock(null);
+                plugin.saveDoors();
+                msg(sender, NamedTextColor.GREEN, "Power block for '" + door.getName() + "' cleared.");
+            }
+            case "show", "find", "where" -> {
+                BlockVector3 pos = door.getPowerBlock();
+                if (pos == null) {
+                    msg(sender, NamedTextColor.GRAY, "'" + door.getName() + "' has no power block.");
+                    return;
+                }
+                World world = plugin.getServer().getWorld(door.getWorld());
+                if (world == null) {
+                    msg(sender, NamedTextColor.RED, "World '" + door.getWorld() + "' isn't loaded.");
+                    return;
+                }
+                plugin.getPreviewManager().showSelection(player, world, List.of(pos),
+                        PreviewManager.SELECTION_COLOR, plugin.getPreviewTicks());
+                msg(sender, NamedTextColor.GOLD, "Power block for '" + door.getName() + "' is at " + pos
+                        + " (glowing) in " + door.getWorld() + ".");
+                describePowerBlockState(sender, door, world, pos);
+            }
+            case "set" -> {
+                Block target = player.getTargetBlockExact(6);
+                if (target == null) {
+                    msg(sender, NamedTextColor.RED, "Look at the block you want to use as the power block.");
+                    return;
+                }
+                if (!target.getWorld().getName().equals(door.getWorld())) {
+                    msg(sender, NamedTextColor.RED, "'" + door.getName() + "' lives in " + door.getWorld() + ".");
+                    return;
+                }
+                Material required = plugin.getPowerBlockMaterial();
+                if (plugin.requiresPowerBlockMaterial() && target.getType() != required) {
+                    msg(sender, NamedTextColor.RED, "A power block must be " + required.name().toLowerCase(Locale.ROOT)
+                            + " (place one there, or set power-block.require-material to false).");
+                    return;
+                }
+                BlockVector3 pos = new BlockVector3(target.getX(), target.getY(), target.getZ());
+                Door existing = plugin.powerBlockOwner(door.getWorld(), pos);
+                if (existing != null && !existing.getId().equals(door.getId())) {
+                    msg(sender, NamedTextColor.RED, "That block is already the power block for '"
+                            + existing.getName() + "'.");
+                    return;
+                }
+                door.setPowerBlock(pos);
+                door.setPowered(target.isBlockPowered() || target.isBlockIndirectlyPowered());
+                plugin.saveDoors();
+                plugin.getPreviewManager().showSelection(player, target.getWorld(), List.of(pos),
+                        PreviewManager.SELECTION_COLOR, plugin.getPreviewTicks());
+                msg(sender, NamedTextColor.GREEN, "Power block for '" + door.getName() + "' set to " + pos + ".");
+                msg(sender, NamedTextColor.GRAY, "Power it with a lever, button, or redstone to toggle the door"
+                        + (plugin.isClickPowerBlock() ? " — or just right-click it." : "."));
+                if (plugin.isProtectPowerBlocks()) {
+                    msg(sender, NamedTextColor.GRAY, "It's protected from breaking; sneak-break it to unbind it.");
+                }
+            }
+            default -> msg(sender, NamedTextColor.RED, "Usage: /door powerblock <name> [clear|show]");
+        }
+    }
+
+    /** Report whether a bound power block is actually usable right now. */
+    private void describePowerBlockState(CommandSender sender, Door door, World world, BlockVector3 pos) {
+        Block block = world.getBlockAt(pos.x(), pos.y(), pos.z());
+        Material required = plugin.getPowerBlockMaterial();
+        if (plugin.requiresPowerBlockMaterial() && block.getType() != required) {
+            msg(sender, NamedTextColor.RED, "  it is " + block.getType().name().toLowerCase(Locale.ROOT)
+                    + ", not " + required.name().toLowerCase(Locale.ROOT) + " — redstone won't drive the door.");
+            return;
+        }
+        msg(sender, NamedTextColor.YELLOW, "  currently "
+                + (block.isBlockPowered() || block.isBlockIndirectlyPowered() ? "powered" : "unpowered") + ".");
+    }
+
     private void trigger(CommandSender sender, String[] args) {
         if (!requireAdmin(sender) || !(sender instanceof Player player)) {
             return;
@@ -620,7 +710,7 @@ public class DoorCommand implements TabExecutor {
         if (door == null) {
             return;
         }
-        ToggleResult result = plugin.attemptToggle(door);
+        ToggleResult result = plugin.attemptToggle(door, sender instanceof Player player ? player : null);
         if (result != ToggleResult.STARTED) {
             msg(sender, NamedTextColor.GRAY, result.message());
         }
@@ -681,7 +771,7 @@ public class DoorCommand implements TabExecutor {
         }
         String sub = args[0].toLowerCase(Locale.ROOT);
         if (args.length == 2 && List.of("remove", "info", "hinge", "type", "direction", "slide",
-                "trigger", "toggle", "preview", "edit", "update").contains(sub)) {
+                "trigger", "toggle", "preview", "edit", "update", "powerblock").contains(sub)) {
             List<String> names = new ArrayList<>();
             plugin.getDoorManager().all().forEach(d -> names.add(d.getName()));
             return filter(names, args[1]);
@@ -697,6 +787,9 @@ public class DoorCommand implements TabExecutor {
         }
         if (args.length == 3 && sub.equals("trigger")) {
             return filter(List.of("redstone", "float", "clear"), args[2]);
+        }
+        if (args.length == 3 && sub.equals("powerblock")) {
+            return filter(List.of("clear", "show"), args[2]);
         }
         if (args.length == 3 && sub.equals("preview")) {
             return filter(List.of("open", "close"), args[2]);

@@ -64,6 +64,9 @@ public class DoorStorage {
         door.setQuarterTurns(sec.getInt("quarterTurns", 1));
         door.setSlide(sec.getInt("slide", 0));
         door.setOpen(sec.getBoolean("open", false));
+        if (sec.isList("power")) {
+            door.setPowerBlock(readVec(sec.getIntegerList("power")));
+        }
         if (sec.isList("redstone")) {
             door.setRedstoneTrigger(readVec(sec.getIntegerList("redstone")));
         }
@@ -129,6 +132,7 @@ public class DoorStorage {
         yaml.set(base + ".quarterTurns", door.getQuarterTurns());
         yaml.set(base + ".slide", door.getSlide());
         yaml.set(base + ".open", door.isOpen());
+        yaml.set(base + ".power", door.getPowerBlock() == null ? null : vecList(door.getPowerBlock()));
         yaml.set(base + ".redstone", door.getRedstoneTrigger() == null ? null : vecList(door.getRedstoneTrigger()));
         yaml.set(base + ".floating", door.getFloatingTrigger() == null ? null : vecList(door.getFloatingTrigger()));
         yaml.set(base + ".floatingEntity",

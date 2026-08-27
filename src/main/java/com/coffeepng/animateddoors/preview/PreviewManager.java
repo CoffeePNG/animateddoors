@@ -2,13 +2,13 @@ package com.coffeepng.animateddoors.preview;
 
 import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
 import com.coffeepng.animateddoors.door.DoorGeometry;
+import com.coffeepng.animateddoors.door.DoorObstruction;
 import com.coffeepng.animateddoors.model.BlockVector3;
 import com.coffeepng.animateddoors.model.Door;
 import com.coffeepng.animateddoors.model.DoorType;
 import com.coffeepng.animateddoors.util.DoorTransform;
 import org.bukkit.Color;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.BlockDisplay;
@@ -155,43 +155,28 @@ public class PreviewManager {
     }
 
     /**
-     * Blocks that the door would overwrite on its next move: destination cells that are occupied by
+     * Blocks that the door would overwrite on its next move — destination cells occupied by
      * something which is neither air nor part of the door itself.
      */
     public List<BlockVector3> obstructions(Door door) {
         World world = plugin.getServer().getWorld(door.getWorld());
-        List<BlockVector3> out = new ArrayList<>();
         if (world == null) {
-            return out;
+            return new ArrayList<>();
         }
-        boolean opening = !door.isOpen();
-        for (BlockVector3 closed : door.closedPositions()) {
-            BlockVector3 openPos = DoorGeometry.openPosition(door, closed);
-            BlockVector3 from = opening ? closed : openPos;
-            BlockVector3 to = opening ? openPos : closed;
-            if (to.equals(from)) {
-                continue;
-            }
-            if (isDoorCell(door, to, opening)) {
-                continue;
-            }
-            Material material = world.getBlockAt(to.x(), to.y(), to.z()).getType();
-            if (!material.isAir()) {
-                out.add(to);
-            }
-        }
-        return out;
+        return DoorObstruction.find(world, door, !door.isOpen());
     }
 
-    /** True if {@code cell} is currently occupied by the door itself. */
-    private boolean isDoorCell(Door door, BlockVector3 cell, boolean opening) {
-        for (BlockVector3 closed : door.closedPositions()) {
-            BlockVector3 current = opening ? closed : DoorGeometry.openPosition(door, closed);
-            if (current.equals(cell)) {
-                return true;
-            }
+    /** Outline the blocks in the way of a door's next move, in red. */
+    public int showObstructions(Player viewer, Door door, int ticks) {
+        World world = plugin.getServer().getWorld(door.getWorld());
+        if (world == null) {
+            return 0;
         }
-        return false;
+        List<BlockVector3> blocked = DoorObstruction.find(world, door, !door.isOpen());
+        if (blocked.isEmpty()) {
+            return 0;
+        }
+        return showSelection(viewer, world, blocked, OBSTRUCTION_COLOR, ticks);
     }
 
     /** Drop any preview this player has running. */

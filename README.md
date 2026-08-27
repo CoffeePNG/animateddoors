@@ -80,8 +80,14 @@ back to the door. Both require the door to be closed.
 
 ### Triggers
 
+- **Power block:** the door's dedicated control block. Place a **gold block** (configurable), look at it and
+  run `/door powerblock mygate`. Powering it — lever, button, plate, repeater, dust running into it —
+  toggles the door on the rising edge, and right-clicking it toggles it too. Power blocks are protected
+  from being broken, burned or blown up; an admin sneak-breaks one to unbind it. `/door powerblock mygate
+  show` makes it glow and tells you whether it's currently powered, and `... clear` unbinds it.
 - **Redstone:** look at a block and run `/door trigger mygate redstone`. Powering that block (lever,
-  button, redstone signal) toggles the door on the rising edge.
+  button, redstone signal) toggles the door on the rising edge. Same idea as a power block, without the
+  material requirement, the protection or the click-to-toggle.
 - **Floating click-trigger:** look at a spot and run `/door trigger mygate float`. This places an
   invisible, floating clickable zone there — right-click it to toggle. Handy for a doorknob-style hotspot
   in mid-air.
@@ -107,6 +113,7 @@ back to the door. Both require the door to be closed.
 | `/door hinge <name>` | (swing) Set the hinge to the block you're looking at |
 | `/door direction <name> <cw\|ccw>` | (swing) Set the opening direction |
 | `/door slide <name> <blocks>` | (portcullis) Set vertical distance (+up / −down) |
+| `/door powerblock <name> [clear\|show]` | Bind / unbind / locate the door's power block |
 | `/door trigger <name> <redstone\|float\|clear>` | Manage triggers |
 | `/door toggle <name>` | Open/close a door |
 | `/door info <name>` | Show a door's details |
@@ -133,6 +140,14 @@ animation:
 triggers:
   click-door-to-toggle: true
   cooldown-ticks: 10   # min ticks between toggles of the same door
+power-block:
+  material: GOLD_BLOCK
+  require-material: true   # only a block of that material can drive the door
+  protect: true            # can't be broken/burned/exploded; sneak-break to unbind
+  click-to-toggle: true    # right-clicking the power block toggles the door
+restrictions:
+  block-filled-containers: true
+  obstruction: block       # block = refuse to move, overwrite = destroy what's in the way
 selection:
   wand-material: BLAZE_ROD
   default-mode: block  # block = pick blocks individually, region = two-corner box
@@ -152,8 +167,14 @@ preview:
   any container inside it (chest, barrel, furnace, hopper, shulker box, …) still holds items — empty it
   first, or disable the guard with `restrictions.block-filled-containers: false`. Empty containers move
   freely. Sign text is still not preserved.
-- A move overwrites whatever occupies the destination cells, so leave the door's path (swing arc or slide
-  column) clear. `/door preview` counts the blocks in the way before you find out the hard way.
+- **Blocks in the way:** by default a door checks its destination cells before moving. If anything solid
+  is standing there, the door **refuses to move**, the offending blocks glow red for whoever triggered it,
+  and the trigger reports why. Air, water and replaceable growth (grass, snow layers, fire) don't count —
+  the door sweeps those aside. Only destination cells matter: the animation is drawn with display
+  entities, so a block partway along a swing arc is passed straight through and is not an obstruction.
+  Set `restrictions.obstruction: overwrite` for the old behaviour, where the door moves anyway and
+  destroys whatever occupied its landing cells. `/door preview <name>` reports the count either way,
+  before you find out the hard way.
 - Doors created before per-block selection were stored as a box; they load as every block in that box and
   are rewritten in the new per-block format on the next save. Run `/door edit`/`/door update` on them to
   trim anything that was never part of the door.

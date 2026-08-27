@@ -79,6 +79,11 @@ public class DoorAnimator {
             return ToggleResult.EMPTY;
         }
 
+        // Anything standing in a destination cell would be silently destroyed when the blocks land.
+        if (plugin.isBlockOnObstruction() && !DoorObstruction.find(world, door, opening).isEmpty()) {
+            return ToggleResult.OBSTRUCTED;
+        }
+
         door.setAnimating(true);
 
         // Net rotation applied to block facing over this move (0 for portcullis).

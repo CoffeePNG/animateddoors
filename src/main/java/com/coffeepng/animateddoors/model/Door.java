@@ -43,12 +43,16 @@ public class Door {
     private boolean open;
 
     // Optional triggers.
+    /** Dedicated control block (a gold block by default): power it to toggle the door. */
+    private BlockVector3 powerBlock;
     private BlockVector3 redstoneTrigger;
     private BlockVector3 floatingTrigger;
     private UUID floatingEntityId;
 
     // Runtime-only state.
     private transient boolean animating;
+    /** Last known powered state of this door's control blocks, for rising-edge detection. */
+    private transient boolean powered;
 
     public Door(UUID id, String name, String world, Collection<BlockVector3> blocks) {
         this.id = id;
@@ -182,6 +186,14 @@ public class Door {
         this.open = open;
     }
 
+    public BlockVector3 getPowerBlock() {
+        return powerBlock;
+    }
+
+    public void setPowerBlock(BlockVector3 powerBlock) {
+        this.powerBlock = powerBlock;
+    }
+
     public BlockVector3 getRedstoneTrigger() {
         return redstoneTrigger;
     }
@@ -204,6 +216,14 @@ public class Door {
 
     public void setFloatingEntityId(UUID floatingEntityId) {
         this.floatingEntityId = floatingEntityId;
+    }
+
+    public boolean isPowered() {
+        return powered;
+    }
+
+    public void setPowered(boolean powered) {
+        this.powered = powered;
     }
 
     public boolean isAnimating() {

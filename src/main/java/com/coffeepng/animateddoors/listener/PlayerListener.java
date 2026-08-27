@@ -52,9 +52,24 @@ public class PlayerListener implements Listener {
             return;
         }
 
-        if (event.getAction() == Action.RIGHT_CLICK_BLOCK && plugin.isClickToToggle()) {
-            BlockVector3 pos = new BlockVector3(block.getX(), block.getY(), block.getZ());
-            Optional<Door> door = plugin.getDoorManager().doorAt(block.getWorld().getName(), pos);
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        BlockVector3 pos = new BlockVector3(block.getX(), block.getY(), block.getZ());
+        String world = block.getWorld().getName();
+
+        // A power block is a doorknob you can also wire up: clicking it toggles its door.
+        if (plugin.isClickPowerBlock()) {
+            Door powered = plugin.powerBlockOwner(world, pos);
+            if (powered != null && player.hasPermission("animateddoors.toggle")) {
+                event.setCancelled(true);
+                toggle(player, powered);
+                return;
+            }
+        }
+
+        if (plugin.isClickToToggle()) {
+            Optional<Door> door = plugin.getDoorManager().doorAt(world, pos);
             if (door.isPresent() && player.hasPermission("animateddoors.toggle")) {
                 event.setCancelled(true);
                 toggle(player, door.get());
@@ -144,7 +159,7 @@ public class PlayerListener implements Listener {
     }
 
     private void toggle(Player player, Door door) {
-        ToggleResult result = plugin.attemptToggle(door);
+        ToggleResult result = plugin.attemptToggle(door, player);
         if (result != ToggleResult.STARTED) {
             player.sendMessage(Component.text(result.message(), NamedTextColor.GRAY));
         }

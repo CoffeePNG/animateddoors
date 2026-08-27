@@ -15,7 +15,9 @@ public enum ToggleResult {
     /** No solid blocks were found to move. */
     EMPTY,
     /** A container in the door still holds items. */
-    CONTAINER_WITH_ITEMS;
+    CONTAINER_WITH_ITEMS,
+    /** Something is standing where the door would land. */
+    OBSTRUCTED;
 
     /** Human-readable feedback for this outcome. */
     public String message() {
@@ -26,6 +28,7 @@ public enum ToggleResult {
             case NO_WORLD -> "That door's world isn't loaded.";
             case EMPTY -> "That door has no solid blocks to move.";
             case CONTAINER_WITH_ITEMS -> "That door contains a container with items — empty it first.";
+            case OBSTRUCTED -> "Something is in the way of that door — clear where it lands and try again.";
         };
     }
 }
