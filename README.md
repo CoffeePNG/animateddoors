@@ -93,10 +93,13 @@ no matter what is selected.
 Previews are drawn with `BlockDisplay` ghosts and are visible **only to you**; no real block is ever moved
 by one.
 
-- `/door finish` — outline the blocks currently selected. This is the "is my selection actually the door?"
-  check.
-- `/door preview <name> [open|close]` — ghost-run an existing door's move. Also reports how many blocks
-  sit where the door would land and would be overwritten by a real toggle.
+- `/door finish` — outline the blocks currently selected in blue. This is the "is my selection actually
+  the door?" check. Blocks standing where the door would **land** are outlined in **red** on top, so one
+  command answers both "are these the right blocks?" and "will it actually be able to move?". Red needs a
+  hinge and direction to compute, so it appears once the door exists — when you're editing one with
+  `/door edit`, and again right after `/door create` and `/door update`.
+- `/door preview <name> [open|close]` — ghost-run an existing door's move in green, with anything standing
+  in its landing cells outlined in red.
 - The outline also refreshes automatically after each wand click (turn it off with `preview.enabled`).
 
 ### Working on one door

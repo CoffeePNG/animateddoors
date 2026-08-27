@@ -71,7 +71,25 @@ public class PreviewManager {
      * @return how many outlines were drawn (air cells are skipped)
      */
     public int showSelection(Player viewer, World world, Collection<BlockVector3> cells, Color color, int ticks) {
-        Session session = restart(viewer);
+        return draw(restart(viewer), viewer, world, cells, color, ticks);
+    }
+
+    /**
+     * Add more outlines to whatever this player is already being shown, instead of replacing it.
+     *
+     * <p>Used to paint a second colour over a preview — the blocks in the way of a door, on top of
+     * the door's own blocks — so both can be read at once.</p>
+     */
+    public int overlay(Player viewer, World world, Collection<BlockVector3> cells, Color color, int ticks) {
+        Session session = sessions.get(viewer.getUniqueId());
+        if (session == null) {
+            session = restart(viewer);
+        }
+        return draw(session, viewer, world, cells, color, ticks);
+    }
+
+    private int draw(Session session, Player viewer, World world, Collection<BlockVector3> cells,
+                     Color color, int ticks) {
         int drawn = 0;
         for (BlockVector3 cell : cells) {
             BlockData data = world.getBlockAt(cell.x(), cell.y(), cell.z()).getBlockData();
@@ -173,18 +191,6 @@ public class PreviewManager {
 
         expireAfter(viewer, session, steps * stepTicks + Math.max(0, holdTicks));
         return session.displays.size();
-    }
-
-    /**
-     * Blocks that the door would overwrite on its next move — destination cells occupied by
-     * something which is neither air nor part of the door itself.
-     */
-    public List<BlockVector3> obstructions(Door door) {
-        World world = plugin.getServer().getWorld(door.getWorld());
-        if (world == null) {
-            return new ArrayList<>();
-        }
-        return DoorObstruction.find(world, door, !door.isOpen());
     }
 
     /** Outline the blocks in the way of a door's next move, in red. */

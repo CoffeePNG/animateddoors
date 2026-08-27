@@ -2,6 +2,7 @@ package com.coffeepng.dynamicdoors.command;
 
 import com.coffeepng.dynamicdoors.DynamicDoorsPlugin;
 import com.coffeepng.dynamicdoors.door.DoorAnimator;
+import com.coffeepng.dynamicdoors.door.DoorObstruction;
 import com.coffeepng.dynamicdoors.door.ToggleResult;
 import com.coffeepng.dynamicdoors.model.BlockVector3;
 import com.coffeepng.dynamicdoors.model.Door;
@@ -264,12 +265,66 @@ public class DoorCommand implements TabExecutor {
         msg(sender, NamedTextColor.GOLD, "Preview: " + shown + " block(s) glowing — that is exactly what will move.");
         msg(sender, NamedTextColor.GRAY, "Wrong blocks in there? Left-click them with the wand to drop them, "
                 + "then /door finish again. Happy? /door create <name>.");
+        previewObstructions(sender, player, world, cells);
         List<BlockVector3> attached = AttachmentScanner.find(world, cells, plugin.getAttachLimit());
         if (!attached.isEmpty()) {
             msg(sender, NamedTextColor.GOLD, attached.size() + " block(s) look attached to this door but aren't "
                     + "in it (" + summarise(world, attached) + ") — /door attach pulls them in.");
         }
         warnContainers(sender, world, cells);
+    }
+
+    /**
+     * Paint the blocks in the way of this selection red, on top of the selection preview.
+     *
+     * <p>Where a door lands depends on its hinge, direction and slide, so this can only be worked
+     * out once those exist: it uses the door being edited when the selection belongs to one, and
+     * otherwise says what's still missing rather than guessing an arc.</p>
+     */
+    private void previewObstructions(CommandSender sender, Player player, World world, List<BlockVector3> cells) {
+        Door motion = editedDoor(player, cells);
+        if (motion == null) {
+            msg(sender, NamedTextColor.GRAY, "Blocks in the way can't be checked yet — that depends on the hinge "
+                    + "and direction. They'll be shown in red as soon as the door exists.");
+            return;
+        }
+        // The selection may differ from the door's current blocks, so measure the selection itself.
+        Door provisional = new Door(UUID.randomUUID(), motion.getName(), motion.getWorld(), cells);
+        provisional.setHinge(motion.getHingeX(), motion.getHingeZ());
+        provisional.setType(motion.getType());
+        provisional.setQuarterTurns(motion.getQuarterTurns());
+        provisional.setSlide(motion.getSlide());
+        provisional.setOpen(motion.isOpen());
+        reportObstructions(sender, player, world, provisional);
+    }
+
+    /** Outline a real door's obstructions in red over whatever is already being previewed. */
+    private void reportObstructions(CommandSender sender, Player player, World world, Door door) {
+        List<BlockVector3> blocked = DoorObstruction.find(world, door, !door.isOpen());
+        if (blocked.isEmpty()) {
+            msg(sender, NamedTextColor.GRAY, "Nothing is in the way of where it lands.");
+            return;
+        }
+        plugin.getPreviewManager().overlay(player, world, blocked,
+                PreviewManager.OBSTRUCTION_COLOR, plugin.getPreviewTicks());
+        msg(sender, NamedTextColor.RED, blocked.size() + " block(s) in red are where it would land — "
+                + (plugin.isBlockOnObstruction()
+                    ? "it will refuse to move until they're cleared."
+                    : "a toggle would overwrite them (restrictions.obstruction = overwrite)."));
+    }
+
+    /** The door this selection is an edit of, if it overlaps the player's selected door. */
+    private Door editedDoor(Player player, List<BlockVector3> cells) {
+        Door active = plugin.getActiveDoor(player);
+        if (active == null || !active.getWorld().equals(player.getWorld().getName())) {
+            return null;
+        }
+        for (BlockVector3 cell : cells) {
+            if (active.containsClosed(cell)) {
+                return active;
+            }
+        }
+        return null;
     }
 
     private void create(CommandSender sender, String[] args) {
@@ -300,6 +355,7 @@ public class DoorCommand implements TabExecutor {
         msg(sender, NamedTextColor.GREEN, "Created door '" + name + "' from " + cells.size() + " block(s). "
                 + "Hinge defaults to its min corner; set it with /door hinge " + name
                 + " and pick a direction with /door direction " + name + " cw|ccw.");
+        reportObstructions(sender, player, player.getWorld(), door);
         msg(sender, NamedTextColor.GRAY, "Check the motion with /door preview " + name + " before wiring it up.");
         warnContainers(sender, player.getWorld(), cells);
     }
@@ -368,6 +424,7 @@ public class DoorCommand implements TabExecutor {
                 PreviewManager.SELECTION_COLOR, plugin.getPreviewTicks());
         msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' now has " + cells.size()
                 + " block(s) (was " + before + ").");
+        reportObstructions(sender, player, player.getWorld(), door);
         warnContainers(sender, player.getWorld(), cells);
     }
 
@@ -400,12 +457,17 @@ public class DoorCommand implements TabExecutor {
         }
         msg(sender, NamedTextColor.GOLD, "Ghost-running " + door.getName() + " " + (opening ? "open" : "closed")
                 + " with " + ghosts + " block(s). No real blocks are touched.");
-        List<BlockVector3> blocked = plugin.getPreviewManager().obstructions(door);
-        if (!blocked.isEmpty()) {
-            msg(sender, NamedTextColor.GOLD, "Heads up: " + blocked.size() + " block(s) sit where this door lands — "
-                    + (plugin.isBlockOnObstruction()
-                        ? "it will refuse to move until they're cleared."
-                        : "a real toggle would overwrite them (restrictions.obstruction = overwrite)."));
+        World world = plugin.getServer().getWorld(door.getWorld());
+        if (world != null) {
+            List<BlockVector3> blocked = DoorObstruction.find(world, door, opening);
+            if (!blocked.isEmpty()) {
+                plugin.getPreviewManager().overlay(player, world, blocked,
+                        PreviewManager.OBSTRUCTION_COLOR, plugin.getPreviewTicks());
+                msg(sender, NamedTextColor.RED, blocked.size() + " block(s) in red sit where this door lands — "
+                        + (plugin.isBlockOnObstruction()
+                            ? "it will refuse to move until they're cleared."
+                            : "a real toggle would overwrite them (restrictions.obstruction = overwrite)."));
+            }
         }
     }
 
