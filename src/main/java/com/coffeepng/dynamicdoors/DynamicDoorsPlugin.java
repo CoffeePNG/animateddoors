@@ -52,6 +52,7 @@ public class DynamicDoorsPlugin extends JavaPlugin {
     private boolean requirePowerBlockMaterial;
     private boolean protectPowerBlocks;
     private boolean clickPowerBlock;
+    private boolean givePowerBlockWithWand;
     private boolean previewEnabled;
     private int previewTicks;
     private int previewLiveTicks;
@@ -66,6 +67,7 @@ public class DynamicDoorsPlugin extends JavaPlugin {
         this.doorKey = new NamespacedKey(this, "door");
         this.doorManager = new DoorManager();
         this.doorStorage = new DoorStorage(getDataFolder(), getLogger());
+        this.doorStorage.setCompact(getConfig().getBoolean("storage.compact", true));
         this.doorAnimator = new DoorAnimator(this);
         this.selectionManager = new SelectionManager();
         this.selectionManager.setDefaultMode(readDefaultSelectionMode());
@@ -123,6 +125,7 @@ public class DynamicDoorsPlugin extends JavaPlugin {
         this.requirePowerBlockMaterial = getConfig().getBoolean("power-block.require-material", true);
         this.protectPowerBlocks = getConfig().getBoolean("power-block.protect", true);
         this.clickPowerBlock = getConfig().getBoolean("power-block.click-to-toggle", true);
+        this.givePowerBlockWithWand = getConfig().getBoolean("power-block.give-with-wand", true);
         this.wandMaterial = getConfig().getString("selection.wand-material", "BLAZE_ROD");
         this.previewEnabled = getConfig().getBoolean("preview.enabled", true);
         this.previewTicks = getConfig().getInt("preview.duration-ticks", 200);
@@ -167,6 +170,7 @@ public class DynamicDoorsPlugin extends JavaPlugin {
         reloadConfig();
         readConfigValues();
         selectionManager.setDefaultMode(readDefaultSelectionMode());
+        doorStorage.setCompact(getConfig().getBoolean("storage.compact", true));
     }
 
     // ---- Previews ----------------------------------------------------------
@@ -403,6 +407,58 @@ public class DynamicDoorsPlugin extends JavaPlugin {
 
     public boolean isClickPowerBlock() {
         return clickPowerBlock;
+    }
+
+    public boolean isGivePowerBlockWithWand() {
+        return givePowerBlockWithWand;
+    }
+
+    /**
+     * Bind a block as a door's power block, validating it and telling the player what happened.
+     * Shared by /door powerblock and the wand, so both behave identically.
+     *
+     * @return true if the power block was bound
+     */
+    public boolean bindPowerBlock(Player player, Door door, org.bukkit.block.Block target) {
+        if (!target.getWorld().getName().equals(door.getWorld())) {
+            player.sendMessage(net.kyori.adventure.text.Component.text(
+                    "'" + door.getName() + "' lives in " + door.getWorld() + ".",
+                    net.kyori.adventure.text.format.NamedTextColor.RED));
+            return false;
+        }
+        if (requirePowerBlockMaterial && target.getType() != powerBlockMaterial) {
+            player.sendMessage(net.kyori.adventure.text.Component.text(
+                    "A power block must be " + powerBlockMaterial.name().toLowerCase(java.util.Locale.ROOT)
+                            + " (place one there, or set power-block.require-material to false).",
+                    net.kyori.adventure.text.format.NamedTextColor.RED));
+            return false;
+        }
+        BlockVector3 pos = new BlockVector3(target.getX(), target.getY(), target.getZ());
+        Door existing = powerBlockOwner(door.getWorld(), pos);
+        if (existing != null && !existing.getId().equals(door.getId())) {
+            player.sendMessage(net.kyori.adventure.text.Component.text(
+                    "That block is already the power block for '" + existing.getName() + "'.",
+                    net.kyori.adventure.text.format.NamedTextColor.RED));
+            return false;
+        }
+        door.setPowerBlock(pos);
+        door.setPowered(target.isBlockPowered() || target.isBlockIndirectlyPowered());
+        saveDoors();
+        previewManager.showSelection(player, target.getWorld(), java.util.List.of(pos),
+                PreviewManager.SELECTION_COLOR, previewTicks);
+        player.sendMessage(net.kyori.adventure.text.Component.text(
+                "Power block for '" + door.getName() + "' set to " + pos + ".",
+                net.kyori.adventure.text.format.NamedTextColor.GREEN));
+        player.sendMessage(net.kyori.adventure.text.Component.text(
+                "Power it with a lever, button, or redstone to toggle the door"
+                        + (clickPowerBlock ? " — or just right-click it." : "."),
+                net.kyori.adventure.text.format.NamedTextColor.GRAY));
+        if (protectPowerBlocks) {
+            player.sendMessage(net.kyori.adventure.text.Component.text(
+                    "It's protected from breaking; sneak-break it to unbind it.",
+                    net.kyori.adventure.text.format.NamedTextColor.GRAY));
+        }
+        return true;
     }
 
     /** The door whose power block sits at this position, if any. */

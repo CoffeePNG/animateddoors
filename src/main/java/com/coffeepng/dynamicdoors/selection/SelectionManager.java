@@ -31,8 +31,19 @@ public class SelectionManager {
         public BlockVector3 pos1;
         public BlockVector3 pos2;
 
+        /** Door awaiting a power block from this player's next wand click, if any. */
+        private UUID pendingPowerBlock;
+
         Selection(SelectionMode mode) {
             this.mode = mode;
+        }
+
+        public UUID pendingPowerBlock() {
+            return pendingPowerBlock;
+        }
+
+        public void setPendingPowerBlock(UUID doorId) {
+            this.pendingPowerBlock = doorId;
         }
 
         public SelectionMode mode() {

@@ -115,6 +115,11 @@ public class PlayerListener implements Listener {
             return;
         }
 
+        // A pending /door powerblock <name> wand takes over the next click entirely.
+        if (selection.pendingPowerBlock() != null && handlePendingPowerBlock(player, selection, block, right)) {
+            return;
+        }
+
         // In block mode the plain clicks pick blocks and the shifted ones set box corners,
         // so a big flat door can still be grabbed in one go with /door add.
         boolean corners = selection.mode() == SelectionMode.REGION || player.isSneaking();
@@ -151,6 +156,42 @@ public class PlayerListener implements Listener {
             }
         }
         plugin.previewSelection(player, selection);
+    }
+
+    /**
+     * Consume a wand click that was armed by {@code /door powerblock <name> wand}.
+     *
+     * @return true if the click was consumed
+     */
+    private boolean handlePendingPowerBlock(Player player, SelectionManager.Selection selection,
+                                            Block block, boolean right) {
+        UUID doorId = selection.pendingPowerBlock();
+        Door door = null;
+        for (Door candidate : plugin.getDoorManager().all()) {
+            if (candidate.getId().equals(doorId)) {
+                door = candidate;
+                break;
+            }
+        }
+        if (door == null) {
+            // The door was removed while we were waiting.
+            selection.setPendingPowerBlock(null);
+            return false;
+        }
+        if (!right) {
+            selection.setPendingPowerBlock(null);
+            player.sendMessage(Component.text("Power block binding for '" + door.getName() + "' cancelled.",
+                    NamedTextColor.GRAY));
+            return true;
+        }
+        // On a rejected block, stay armed so the next click can try again.
+        if (plugin.bindPowerBlock(player, door, block)) {
+            selection.setPendingPowerBlock(null);
+        } else {
+            player.sendMessage(Component.text("Still waiting for a power block for '" + door.getName()
+                    + "' — right-click another block, or left-click to cancel.", NamedTextColor.GRAY));
+        }
+        return true;
     }
 
     @EventHandler

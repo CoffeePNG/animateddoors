@@ -94,7 +94,7 @@ public class DoorCommand implements TabExecutor {
         line(sender, "/door hinge <name> [here|show|<x> <z>]", "(swing) set or show the column the door pivots around");
         line(sender, "/door direction <name> <cw|ccw>", "(swing) set the opening direction");
         line(sender, "/door slide <name> <blocks>", "(portcullis) set vertical distance (+up / -down)");
-        line(sender, "/door powerblock <name> [clear|show]", "bind/clear/locate the door's power block");
+        line(sender, "/door powerblock <name> [wand|clear|show]", "bind (by look or wand), clear or locate the power block");
         line(sender, "/door trigger <name> redstone", "bind the block you're looking at as a redstone trigger");
         line(sender, "/door trigger <name> float", "place a floating click-trigger at the block you're looking at");
         line(sender, "/door trigger <name> clear", "remove this door's triggers");
@@ -116,6 +116,13 @@ public class DoorCommand implements TabExecutor {
             wand = Material.BLAZE_ROD;
         }
         player.getInventory().addItem(new ItemStack(wand));
+        if (plugin.isGivePowerBlockWithWand()) {
+            player.getInventory().addItem(new ItemStack(plugin.getPowerBlockMaterial()));
+            msg(sender, NamedTextColor.GRAY, "Also handed you a "
+                    + plugin.getPowerBlockMaterial().name().toLowerCase(Locale.ROOT)
+                    + ": place it where you want the door's control block, then "
+                    + "/door powerblock <name> wand and click it.");
+        }
         SelectionManager.Selection sel = plugin.getSelectionManager().get(player.getUniqueId());
         describeMode(player, sel.mode());
     }
@@ -682,42 +689,21 @@ public class DoorCommand implements TabExecutor {
                         + " (glowing) in " + door.getWorld() + ".");
                 describePowerBlockState(sender, door, world, pos);
             }
-            case "set" -> {
-                Block target = player.getTargetBlockExact(6);
-                if (target == null) {
-                    msg(sender, NamedTextColor.RED, "Look at the block you want to use as the power block.");
-                    return;
-                }
-                if (!target.getWorld().getName().equals(door.getWorld())) {
-                    msg(sender, NamedTextColor.RED, "'" + door.getName() + "' lives in " + door.getWorld() + ".");
-                    return;
-                }
-                Material required = plugin.getPowerBlockMaterial();
-                if (plugin.requiresPowerBlockMaterial() && target.getType() != required) {
-                    msg(sender, NamedTextColor.RED, "A power block must be " + required.name().toLowerCase(Locale.ROOT)
-                            + " (place one there, or set power-block.require-material to false).");
-                    return;
-                }
-                BlockVector3 pos = new BlockVector3(target.getX(), target.getY(), target.getZ());
-                Door existing = plugin.powerBlockOwner(door.getWorld(), pos);
-                if (existing != null && !existing.getId().equals(door.getId())) {
-                    msg(sender, NamedTextColor.RED, "That block is already the power block for '"
-                            + existing.getName() + "'.");
-                    return;
-                }
-                door.setPowerBlock(pos);
-                door.setPowered(target.isBlockPowered() || target.isBlockIndirectlyPowered());
-                plugin.saveDoors();
-                plugin.getPreviewManager().showSelection(player, target.getWorld(), List.of(pos),
-                        PreviewManager.SELECTION_COLOR, plugin.getPreviewTicks());
-                msg(sender, NamedTextColor.GREEN, "Power block for '" + door.getName() + "' set to " + pos + ".");
-                msg(sender, NamedTextColor.GRAY, "Power it with a lever, button, or redstone to toggle the door"
-                        + (plugin.isClickPowerBlock() ? " — or just right-click it." : "."));
-                if (plugin.isProtectPowerBlocks()) {
-                    msg(sender, NamedTextColor.GRAY, "It's protected from breaking; sneak-break it to unbind it.");
-                }
+            case "wand" -> {
+                plugin.getSelectionManager().get(player.getUniqueId()).setPendingPowerBlock(door.getId());
+                msg(sender, NamedTextColor.GREEN, "Right-click a block with the wand to make it the power block "
+                        + "for '" + door.getName() + "'. Left-click to cancel.");
             }
-            default -> msg(sender, NamedTextColor.RED, "Usage: /door powerblock <name> [clear|show]");
+            case "set" -> {
+                Block target = player.getTargetBlockExact(HINGE_REACH);
+                if (target == null) {
+                    msg(sender, NamedTextColor.RED, "Look at the block you want to use as the power block, "
+                            + "or run /door powerblock " + door.getName() + " wand to click it with the wand.");
+                    return;
+                }
+                plugin.bindPowerBlock(player, door, target);
+            }
+            default -> msg(sender, NamedTextColor.RED, "Usage: /door powerblock <name> [wand|clear|show]");
         }
     }
 
@@ -871,7 +857,7 @@ public class DoorCommand implements TabExecutor {
             return filter(List.of("here", "show"), args[2]);
         }
         if (args.length == 3 && sub.equals("powerblock")) {
-            return filter(List.of("clear", "show"), args[2]);
+            return filter(List.of("wand", "clear", "show"), args[2]);
         }
         if (args.length == 3 && sub.equals("preview")) {
             return filter(List.of("open", "close"), args[2]);

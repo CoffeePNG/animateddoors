@@ -85,8 +85,10 @@ back to the door. Both require the door to be closed.
 
 ### Triggers
 
-- **Power block:** the door's dedicated control block. Place a **gold block** (configurable), look at it and
-  run `/door powerblock mygate`. Powering it — lever, button, plate, repeater, dust running into it —
+- **Power block:** the door's dedicated control block. `/door wand` hands you one along with the wand.
+  Place it, then either look at it and run `/door powerblock mygate`, or run
+  `/door powerblock mygate wand` and **right-click it with the wand** (left-click cancels; clicking a
+  block that isn't valid keeps the wand armed so you can try again). Powering it — lever, button, plate, repeater, dust running into it —
   toggles the door on the rising edge, and right-clicking it toggles it too. Power blocks are protected
   from being broken, burned or blown up; an admin sneak-breaks one to unbind it. `/door powerblock mygate
   show` makes it glow and tells you whether it's currently powered, and `... clear` unbinds it.
@@ -118,7 +120,7 @@ back to the door. Both require the door to be closed.
 | `/door hinge <name> [here\|show\|<x> <z>]` | (swing) Set or show the column the door pivots around |
 | `/door direction <name> <cw\|ccw>` | (swing) Set the opening direction |
 | `/door slide <name> <blocks>` | (portcullis) Set vertical distance (+up / −down) |
-| `/door powerblock <name> [clear\|show]` | Bind / unbind / locate the door's power block |
+| `/door powerblock <name> [wand\|clear\|show]` | Bind (by look or wand), unbind, or locate the power block |
 | `/door trigger <name> <redstone\|float\|clear>` | Manage triggers |
 | `/door toggle <name>` | Open/close a door |
 | `/door info <name>` | Show a door's details |
@@ -127,6 +129,15 @@ back to the door. Both require the door to be closed.
 | `/door reload` | Reload the config |
 
 Aliases: `/ddoor`, `/dynamicdoor`.
+
+### Storage
+
+`doors.yml` is save data, not configuration. Each door is written as one gzipped, Base64-encoded string,
+with its blocks packed as a bitmask over the door's bounding box — a 10×10×10 door costs about 125 bytes
+of mask instead of a thousand lines of coordinates. The encoding round-trips exactly (it is an encoding,
+not a hash); if you ever need to read or hand-edit a door, set `storage.compact: false` and the next save
+writes the old readable layout. Both layouts load, and old readable files are migrated automatically on
+the first save.
 
 ## Upgrading from AnimatedDoors
 
@@ -154,8 +165,11 @@ animation:
 triggers:
   click-door-to-toggle: true
   cooldown-ticks: 10   # min ticks between toggles of the same door
+storage:
+  compact: true            # doors.yml holds one opaque string per door (false = readable layout)
 power-block:
   material: GOLD_BLOCK
+  give-with-wand: true     # /door wand also hands you a power block to place
   require-material: true   # only a block of that material can drive the door
   protect: true            # can't be broken/burned/exploded; sneak-break to unbind
   click-to-toggle: true    # right-clicking the power block toggles the door

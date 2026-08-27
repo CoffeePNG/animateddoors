@@ -15,16 +15,26 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * YAML-backed persistence for doors. One file, one section per door keyed by UUID.
+ * Persistence for doors: {@code doors.yml}, one entry per door keyed by UUID.
+ *
+ * <p>By default each door is written as a single opaque {@link DoorCodec} string — doors are data,
+ * not configuration, and a per-block door is far too bulky to spell out in YAML. Set
+ * {@code storage.compact: false} to write the old readable layout instead, which is handy when
+ * debugging. Either layout loads, so the setting can be flipped at any time.</p>
  */
 public class DoorStorage {
 
     private final File file;
     private final Logger logger;
+    private boolean compact = true;
 
     public DoorStorage(File dataFolder, Logger logger) {
         this.file = new File(dataFolder, "doors.yml");
         this.logger = logger;
+    }
+
+    public void setCompact(boolean compact) {
+        this.compact = compact;
     }
 
     public void loadInto(DoorManager manager) {
@@ -37,13 +47,18 @@ public class DoorStorage {
             return;
         }
         for (String key : root.getKeys(false)) {
-            ConfigurationSection sec = root.getConfigurationSection(key);
-            if (sec == null) {
-                continue;
-            }
             try {
-                Door door = read(UUID.fromString(key), sec);
-                manager.add(door);
+                UUID id = UUID.fromString(key);
+                String encoded = root.getString(key);
+                if (encoded != null) {
+                    manager.add(DoorCodec.decode(id, encoded));
+                    continue;
+                }
+                ConfigurationSection sec = root.getConfigurationSection(key);
+                if (sec == null) {
+                    continue;
+                }
+                manager.add(read(id, sec));
             } catch (RuntimeException ex) {
                 logger.log(Level.WARNING, "Skipping malformed door entry '" + key + "': " + ex.getMessage());
             }
@@ -110,7 +125,11 @@ public class DoorStorage {
     public void saveAll(DoorManager manager) {
         YamlConfiguration yaml = new YamlConfiguration();
         for (Door door : manager.all()) {
-            write(yaml, door);
+            if (compact) {
+                yaml.set("doors." + door.getId(), DoorCodec.encode(door));
+            } else {
+                write(yaml, door);
+            }
         }
         try {
             yaml.save(file);
@@ -119,6 +138,7 @@ public class DoorStorage {
         }
     }
 
+    /** The readable layout, kept for {@code storage.compact: false} and for reading old files. */
     private void write(YamlConfiguration yaml, Door door) {
         String base = "doors." + door.getId();
         yaml.set(base + ".name", door.getName());

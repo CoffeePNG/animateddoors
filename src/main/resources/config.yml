@@ -1,5 +1,13 @@
 # DynamicDoors configuration
 
+storage:
+  # Doors are data, not configuration: each one is written to doors.yml as a single compact,
+  # gzipped, Base64 string (blocks are stored as a bitmask over the door's bounding box, so a
+  # per-block door costs bytes instead of hundreds of lines). Set this to false to write the old
+  # readable layout instead when you need to inspect or hand-edit a door. Both layouts load, so
+  # you can flip this at any time — the next save rewrites every door in the chosen format.
+  compact: true
+
 animation:
   # Total time the door takes to swing open/closed, in server ticks (20 ticks = 1 second).
   duration-ticks: 40
@@ -24,6 +32,8 @@ power-block:
   protect: true
   # Right-clicking a power block toggles its door, no redstone needed.
   click-to-toggle: true
+  # /door wand also hands out one power block to place.
+  give-with-wand: true
 
 restrictions:
   # If true, a door refuses to move while any container inside it (chest, barrel, furnace,
