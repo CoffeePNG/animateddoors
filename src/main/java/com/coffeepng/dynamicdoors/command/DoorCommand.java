@@ -33,6 +33,9 @@ public class DoorCommand implements TabExecutor {
             "preview", "remove", "list", "info", "hinge", "type", "direction", "slide",
             "powerblock", "trigger", "toggle", "reload");
 
+    /** How far away a builder can point at a hinge block. */
+    private static final int HINGE_REACH = 8;
+
     private final DynamicDoorsPlugin plugin;
 
     public DoorCommand(DynamicDoorsPlugin plugin) {
@@ -88,7 +91,7 @@ public class DoorCommand implements TabExecutor {
         line(sender, "/door update <name>", "replace a door's blocks with your selection");
         line(sender, "/door preview <name> [open|close]", "ghost-run the move without touching blocks");
         line(sender, "/door type <name> <swing|portcullis>", "choose swing or vertical-slide motion");
-        line(sender, "/door hinge <name>", "(swing) set the hinge to the block you're looking at");
+        line(sender, "/door hinge <name> [here|show|<x> <z>]", "(swing) set or show the column the door pivots around");
         line(sender, "/door direction <name> <cw|ccw>", "(swing) set the opening direction");
         line(sender, "/door slide <name> <blocks>", "(portcullis) set vertical distance (+up / -down)");
         line(sender, "/door powerblock <name> [clear|show]", "bind/clear/locate the door's power block");
@@ -455,6 +458,12 @@ public class DoorCommand implements TabExecutor {
                 + (door.getFloatingTrigger() == null ? "none" : door.getFloatingTrigger().toString()));
     }
 
+    /**
+     * Set (or show) the vertical column a swing door pivots around.
+     *
+     * <p>Only X and Z matter — the door turns around the Y axis, so the hinge is the whole column
+     * at that (x, z), not one particular block in it.</p>
+     */
     private void hinge(CommandSender sender, String[] args) {
         if (!requireAdmin(sender) || !(sender instanceof Player player)) {
             return;
@@ -463,19 +472,89 @@ public class DoorCommand implements TabExecutor {
         if (door == null) {
             return;
         }
-        Block target = player.getTargetBlockExact(6);
-        int x;
-        int z;
-        if (target != null) {
+
+        Integer x = null;
+        Integer z = null;
+        if (args.length >= 4) {
+            try {
+                x = Integer.parseInt(args[2]);
+                z = Integer.parseInt(args[3]);
+            } catch (NumberFormatException ex) {
+                msg(sender, NamedTextColor.RED, "Usage: /door hinge " + door.getName() + " [here|show|<x> <z>]");
+                return;
+            }
+        } else if (args.length == 3) {
+            String what = args[2].toLowerCase(Locale.ROOT);
+            switch (what) {
+                case "show", "where" -> {
+                    showHinge(sender, player, door);
+                    return;
+                }
+                case "here", "me" -> {
+                    x = player.getLocation().getBlockX();
+                    z = player.getLocation().getBlockZ();
+                }
+                default -> {
+                    msg(sender, NamedTextColor.RED, "Usage: /door hinge " + door.getName() + " [here|show|<x> <z>]");
+                    return;
+                }
+            }
+        } else {
+            Block target = player.getTargetBlockExact(HINGE_REACH);
+            if (target == null) {
+                // Guessing the player's own position here silently put hinges in absurd places.
+                msg(sender, NamedTextColor.RED, "Look at the block the door should pivot around (within "
+                        + HINGE_REACH + " blocks), or use /door hinge " + door.getName()
+                        + " here, or give coordinates: /door hinge " + door.getName() + " <x> <z>.");
+                return;
+            }
+            if (!target.getWorld().getName().equals(door.getWorld())) {
+                msg(sender, NamedTextColor.RED, "'" + door.getName() + "' lives in " + door.getWorld() + ".");
+                return;
+            }
             x = target.getX();
             z = target.getZ();
-        } else {
-            x = player.getLocation().getBlockX();
-            z = player.getLocation().getBlockZ();
         }
+
         door.setHinge(x, z);
         plugin.saveDoors();
-        msg(sender, NamedTextColor.GREEN, "Hinge for '" + door.getName() + "' set to " + x + ", " + z + ".");
+        msg(sender, NamedTextColor.GREEN, "Hinge for '" + door.getName() + "' set to the column at " + x + ", " + z + ".");
+        if (door.getType() != DoorType.SWING) {
+            msg(sender, NamedTextColor.GRAY, "'" + door.getName() + "' is a portcullis, so the hinge is unused "
+                    + "until you switch it back with /door type " + door.getName() + " swing.");
+        }
+        showHinge(sender, player, door);
+    }
+
+    /** Mark the hinge column and say whether it actually runs through the door. */
+    private void showHinge(CommandSender sender, Player player, Door door) {
+        World world = plugin.getServer().getWorld(door.getWorld());
+        if (world == null) {
+            msg(sender, NamedTextColor.RED, "World '" + door.getWorld() + "' isn't loaded.");
+            return;
+        }
+        int hingeX = door.getHingeX();
+        int hingeZ = door.getHingeZ();
+
+        // Mark the column over the door's own height so it is visible from where the builder stands.
+        List<BlockVector3> column = new ArrayList<>();
+        boolean insideDoor = false;
+        for (int y = door.getMin().y(); y <= door.getMax().y(); y++) {
+            BlockVector3 cell = new BlockVector3(hingeX, y, hingeZ);
+            column.add(cell);
+            if (door.containsClosed(cell)) {
+                insideDoor = true;
+            }
+        }
+        plugin.getPreviewManager().showMarkers(player, world, column,
+                Material.GOLD_BLOCK.createBlockData(), PreviewManager.HINGE_COLOR, plugin.getPreviewTicks());
+        msg(sender, NamedTextColor.GOLD, "Hinge column for '" + door.getName() + "': " + hingeX + ", " + hingeZ
+                + " (marked in gold, " + column.size() + " block(s) tall).");
+        if (!insideDoor) {
+            msg(sender, NamedTextColor.GRAY, "That column isn't part of the door, so it swings around a point "
+                    + "outside itself. That's allowed — it just sweeps a wider arc. Pick a block of the door "
+                    + "itself for a normal hinge.");
+        }
         msg(sender, NamedTextColor.GRAY, "See it swing with /door preview " + door.getName() + ".");
     }
 
@@ -787,6 +866,9 @@ public class DoorCommand implements TabExecutor {
         }
         if (args.length == 3 && sub.equals("trigger")) {
             return filter(List.of("redstone", "float", "clear"), args[2]);
+        }
+        if (args.length == 3 && sub.equals("hinge")) {
+            return filter(List.of("here", "show"), args[2]);
         }
         if (args.length == 3 && sub.equals("powerblock")) {
             return filter(List.of("clear", "show"), args[2]);

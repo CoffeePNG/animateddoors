@@ -27,7 +27,9 @@ folder and restart.
 - A door is an explicit **set of blocks** you pick — not a box. Only the blocks you selected move, so a
   wall, floor or roof that happens to share the door's bounding box is never dragged along. Each door
   has a **type**: `swing` or `portcullis`.
-  - **Swing** doors rotate 90° around a **hinge** (a vertical column) in a chosen direction. The client
+  - **Swing** doors rotate 90° around a **hinge** — the vertical column at one (x, z), since the turn is
+    around the Y axis, so any block of that column names the same hinge. It is usually a block of the door
+    itself, but it doesn't have to be: a hinge outside the door just sweeps a wider arc. The client
     interpolates a true arc, and block facing (stairs, logs, fences, signs, …) is rotated to match,
     best-effort.
   - **Portcullis** doors slide straight up or down by a set number of blocks.
@@ -49,7 +51,10 @@ folder and restart.
 
 **For a swing door (default):**
 
-5. `/door hinge mygate` — look at the block the door should pivot around, then run it.
+5. `/door hinge mygate` — look at the block the door should pivot around (up to 8 blocks away), then run
+   it. The hinge column is marked in gold so you can see exactly where it landed. `/door hinge mygate here`
+   uses the block you're standing in, `/door hinge mygate <x> <z>` takes coordinates, and
+   `/door hinge mygate show` re-marks it later.
 6. `/door direction mygate cw` — set swing direction (`cw` or `ccw`; flip it if it swings the wrong way).
 7. `/door preview mygate` — watch a **ghost** of the door swing, without touching a single real block.
 8. `/door toggle mygate` — do it for real.
@@ -110,7 +115,7 @@ back to the door. Both require the door to be closed.
 | `/door update <name>` | Replace a door's blocks with your selection |
 | `/door preview <name> [open\|close]` | Ghost-run the move without touching blocks |
 | `/door type <name> <swing\|portcullis>` | Choose swing or vertical-slide motion |
-| `/door hinge <name>` | (swing) Set the hinge to the block you're looking at |
+| `/door hinge <name> [here\|show\|<x> <z>]` | (swing) Set or show the column the door pivots around |
 | `/door direction <name> <cw\|ccw>` | (swing) Set the opening direction |
 | `/door slide <name> <blocks>` | (portcullis) Set vertical distance (+up / −down) |
 | `/door powerblock <name> [clear\|show]` | Bind / unbind / locate the door's power block |

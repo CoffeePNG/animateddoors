@@ -47,6 +47,8 @@ public class PreviewManager {
     public static final Color MOTION_COLOR = Color.fromRGB(0x8B, 0xFF, 0x6B);
     /** Colour used for blocks that are in the way of the door's destination. */
     public static final Color OBSTRUCTION_COLOR = Color.fromRGB(0xFF, 0x5C, 0x5C);
+    /** Colour of a hinge marker. */
+    public static final Color HINGE_COLOR = Color.fromRGB(0xFF, 0xC4, 0x3D);
 
     private static final float HIGHLIGHT_SCALE = 1.02f;
 
@@ -83,6 +85,25 @@ public class PreviewManager {
         }
         expireAfter(viewer, session, ticks);
         return drawn;
+    }
+
+    /**
+     * Draw a small glowing marker in the middle of each cell, whatever is actually there.
+     *
+     * <p>Unlike {@link #showSelection} this also marks empty cells, so it can point at things that
+     * aren't blocks — like a hinge column running through open air.</p>
+     */
+    public int showMarkers(Player viewer, World world, Collection<BlockVector3> cells,
+                           BlockData marker, Color color, int ticks) {
+        Session session = restart(viewer);
+        for (BlockVector3 cell : cells) {
+            BlockDisplay display = spawn(viewer, world, cell, marker, color);
+            // A quarter-size cube floating at the centre of the cell.
+            display.setTransformationMatrix(new Matrix4f().translate(0.375f, 0.375f, 0.375f).scale(0.25f));
+            session.displays.add(display);
+        }
+        expireAfter(viewer, session, ticks);
+        return session.displays.size();
     }
 
     /**
