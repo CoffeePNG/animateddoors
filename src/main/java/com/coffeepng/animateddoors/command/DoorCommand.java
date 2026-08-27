@@ -1,14 +1,18 @@
 package com.coffeepng.animateddoors.command;
 
 import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
-import com.coffeepng.animateddoors.model.BlockVector3;
+import com.coffeepng.animateddoors.door.DoorAnimator;
 import com.coffeepng.animateddoors.door.ToggleResult;
+import com.coffeepng.animateddoors.model.BlockVector3;
 import com.coffeepng.animateddoors.model.Door;
 import com.coffeepng.animateddoors.model.DoorType;
+import com.coffeepng.animateddoors.preview.PreviewManager;
 import com.coffeepng.animateddoors.selection.SelectionManager;
+import com.coffeepng.animateddoors.selection.SelectionMode;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -25,8 +29,9 @@ import java.util.UUID;
 public class DoorCommand implements TabExecutor {
 
     private static final List<String> SUBS = List.of(
-            "help", "wand", "create", "remove", "list", "info",
-            "hinge", "type", "direction", "slide", "trigger", "toggle", "reload");
+            "help", "wand", "mode", "add", "sub", "clear", "finish", "create", "edit", "update",
+            "preview", "remove", "list", "info", "hinge", "type", "direction", "slide",
+            "trigger", "toggle", "reload");
 
     private final AnimatedDoorsPlugin plugin;
 
@@ -44,7 +49,15 @@ public class DoorCommand implements TabExecutor {
         switch (sub) {
             case "help" -> help(sender);
             case "wand" -> wand(sender);
+            case "mode" -> mode(sender, args);
+            case "add" -> regionInto(sender, true);
+            case "sub", "subtract" -> regionInto(sender, false);
+            case "clear" -> clear(sender);
+            case "finish", "done" -> finish(sender);
             case "create" -> create(sender, args);
+            case "edit" -> edit(sender, args);
+            case "update" -> update(sender, args);
+            case "preview" -> preview(sender, args);
             case "remove" -> remove(sender, args);
             case "list" -> list(sender);
             case "info" -> info(sender, args);
@@ -61,9 +74,18 @@ public class DoorCommand implements TabExecutor {
     }
 
     private void help(CommandSender sender) {
-        msg(sender, NamedTextColor.GOLD, "AnimatedDoors commands:");
+        msg(sender, NamedTextColor.GOLD, "AnimatedDoors — selection:");
         line(sender, "/door wand", "get the selection wand");
+        line(sender, "/door mode <block|region>", "pick blocks one by one, or use two corners");
+        line(sender, "/door add", "(block mode) add the wand's corner box to your picks");
+        line(sender, "/door sub", "(block mode) subtract the wand's corner box from your picks");
+        line(sender, "/door finish", "preview exactly which blocks will move");
+        line(sender, "/door clear", "clear your selection");
+        msg(sender, NamedTextColor.GOLD, "AnimatedDoors — doors:");
         line(sender, "/door create <name>", "create a door from your selection");
+        line(sender, "/door edit <name>", "load a door's blocks back into your selection");
+        line(sender, "/door update <name>", "replace a door's blocks with your selection");
+        line(sender, "/door preview <name> [open|close]", "ghost-run the move without touching blocks");
         line(sender, "/door type <name> <swing|portcullis>", "choose swing or vertical-slide motion");
         line(sender, "/door hinge <name>", "(swing) set the hinge to the block you're looking at");
         line(sender, "/door direction <name> <cw|ccw>", "(swing) set the opening direction");
@@ -78,6 +100,8 @@ public class DoorCommand implements TabExecutor {
         line(sender, "/door reload", "reload the config");
     }
 
+    // ---- selection ---------------------------------------------------------
+
     private void wand(CommandSender sender) {
         if (!requireAdmin(sender) || !(sender instanceof Player player)) {
             return;
@@ -87,7 +111,91 @@ public class DoorCommand implements TabExecutor {
             wand = Material.BLAZE_ROD;
         }
         player.getInventory().addItem(new ItemStack(wand));
-        msg(sender, NamedTextColor.GREEN, "Left-click a block for corner 1, right-click for corner 2.");
+        SelectionManager.Selection sel = plugin.getSelectionManager().get(player.getUniqueId());
+        describeMode(player, sel.mode());
+    }
+
+    private void mode(CommandSender sender, String[] args) {
+        if (!requireAdmin(sender) || !(sender instanceof Player player)) {
+            return;
+        }
+        if (args.length < 2) {
+            msg(sender, NamedTextColor.RED, "Usage: /door mode <block|region>");
+            return;
+        }
+        SelectionMode mode = SelectionMode.fromString(args[1]);
+        if (mode == null) {
+            msg(sender, NamedTextColor.RED, "Mode must be 'block' or 'region'.");
+            return;
+        }
+        plugin.getSelectionManager().get(player.getUniqueId()).setMode(mode);
+        describeMode(player, mode);
+    }
+
+    private void describeMode(Player player, SelectionMode mode) {
+        if (mode == SelectionMode.BLOCK) {
+            msg(player, NamedTextColor.GREEN, "Block mode: right-click a block to add it, left-click to remove it.");
+            msg(player, NamedTextColor.GRAY, "Shift-left / shift-right-click set box corners for /door add and /door sub.");
+        } else {
+            msg(player, NamedTextColor.GREEN, "Region mode: left-click corner 1, right-click corner 2.");
+        }
+        msg(player, NamedTextColor.GRAY, "When it looks right, run /door finish to preview what will move.");
+    }
+
+    private void regionInto(CommandSender sender, boolean adding) {
+        if (!requireAdmin(sender) || !(sender instanceof Player player)) {
+            return;
+        }
+        SelectionManager.Selection sel = plugin.getSelectionManager().get(player.getUniqueId());
+        if (!sel.regionComplete()) {
+            msg(sender, NamedTextColor.RED, "Set both box corners first (shift-left / shift-right-click with the wand).");
+            return;
+        }
+        World world = player.getWorld();
+        if (sel.world() != null && !sel.world().equals(world.getName())) {
+            msg(sender, NamedTextColor.RED, "Your selection is in " + sel.world() + ".");
+            return;
+        }
+        List<BlockVector3> cells = new ArrayList<>();
+        for (BlockVector3 cell : sel.regionPositions()) {
+            // Air never moves anything, so it only clutters the door.
+            if (adding && world.getBlockAt(cell.x(), cell.y(), cell.z()).getType().isAir()) {
+                continue;
+            }
+            cells.add(cell);
+        }
+        int changed = adding ? sel.addAll(cells) : sel.removeAll(cells);
+        msg(sender, NamedTextColor.GREEN, (adding ? "Added " : "Removed ") + changed + " block(s). "
+                + sel.size() + " block(s) selected.");
+        plugin.previewSelection(player, sel);
+    }
+
+    private void clear(CommandSender sender) {
+        if (!requireAdmin(sender) || !(sender instanceof Player player)) {
+            return;
+        }
+        plugin.getSelectionManager().get(player.getUniqueId()).clearBlocks();
+        plugin.getPreviewManager().cancel(player);
+        msg(sender, NamedTextColor.GREEN, "Selection cleared.");
+    }
+
+    /** Show exactly which blocks the door would take — the "hit finished" preview. */
+    private void finish(CommandSender sender) {
+        if (!requireAdmin(sender) || !(sender instanceof Player player)) {
+            return;
+        }
+        SelectionManager.Selection sel = plugin.getSelectionManager().get(player.getUniqueId());
+        List<BlockVector3> cells = resolveSelection(player, sel);
+        if (cells == null) {
+            return;
+        }
+        World world = player.getWorld();
+        int shown = plugin.getPreviewManager().showSelection(
+                player, world, cells, PreviewManager.SELECTION_COLOR, plugin.getPreviewTicks());
+        msg(sender, NamedTextColor.GOLD, "Preview: " + shown + " block(s) glowing — that is exactly what will move.");
+        msg(sender, NamedTextColor.GRAY, "Wrong blocks in there? Left-click them with the wand to drop them, "
+                + "then /door finish again. Happy? /door create <name>.");
+        warnContainers(sender, world, cells);
     }
 
     private void create(CommandSender sender, String[] args) {
@@ -104,24 +212,182 @@ public class DoorCommand implements TabExecutor {
             return;
         }
         SelectionManager.Selection sel = plugin.getSelectionManager().get(player.getUniqueId());
-        if (!sel.complete()) {
-            msg(sender, NamedTextColor.RED, "Select both corners with the wand first (/door wand).");
+        List<BlockVector3> cells = resolveSelection(player, sel);
+        if (cells == null) {
             return;
         }
-        Door door = new Door(UUID.randomUUID(), name, player.getWorld().getName(), sel.min(), sel.max());
+        Door door = new Door(UUID.randomUUID(), name, player.getWorld().getName(), cells);
         plugin.getDoorManager().add(door);
         plugin.saveDoors();
         plugin.getSelectionManager().clear(player.getUniqueId());
-        msg(sender, NamedTextColor.GREEN, "Created door '" + name + "'. Hinge defaults to its min corner; "
-                + "set it with /door hinge " + name + " and pick a direction with /door direction " + name + " cw|ccw.");
+        plugin.getPreviewManager().showSelection(player, player.getWorld(), cells,
+                PreviewManager.SELECTION_COLOR, plugin.getPreviewTicks());
+        msg(sender, NamedTextColor.GREEN, "Created door '" + name + "' from " + cells.size() + " block(s). "
+                + "Hinge defaults to its min corner; set it with /door hinge " + name
+                + " and pick a direction with /door direction " + name + " cw|ccw.");
+        msg(sender, NamedTextColor.GRAY, "Check the motion with /door preview " + name + " before wiring it up.");
+        warnContainers(sender, player.getWorld(), cells);
+    }
 
-        int filled = countFilledContainers(player.getWorld(), sel.min(), sel.max());
+    private void edit(CommandSender sender, String[] args) {
+        if (!requireAdmin(sender) || !(sender instanceof Player player)) {
+            return;
+        }
+        Door door = resolve(sender, args);
+        if (door == null) {
+            return;
+        }
+        if (door.isOpen()) {
+            msg(sender, NamedTextColor.RED, "Close '" + door.getName() + "' first — blocks are stored in the closed layout.");
+            return;
+        }
+        World world = plugin.getServer().getWorld(door.getWorld());
+        if (world == null) {
+            msg(sender, NamedTextColor.RED, "World '" + door.getWorld() + "' isn't loaded.");
+            return;
+        }
+        SelectionManager.Selection sel = plugin.getSelectionManager().get(player.getUniqueId());
+        sel.clearBlocks();
+        sel.bindWorld(door.getWorld());
+        sel.setMode(SelectionMode.BLOCK);
+        sel.addAll(door.closedPositions());
+        plugin.getPreviewManager().showSelection(player, world, door.closedPositions(),
+                PreviewManager.SELECTION_COLOR, plugin.getPreviewTicks());
+        msg(sender, NamedTextColor.GREEN, "Loaded " + sel.size() + " block(s) from '" + door.getName()
+                + "' into your selection (block mode).");
+        msg(sender, NamedTextColor.GRAY, "Left-click strays to drop them, right-click to add, then /door update "
+                + door.getName() + ".");
+    }
+
+    private void update(CommandSender sender, String[] args) {
+        if (!requireAdmin(sender) || !(sender instanceof Player player)) {
+            return;
+        }
+        Door door = resolve(sender, args);
+        if (door == null) {
+            return;
+        }
+        if (door.isOpen()) {
+            msg(sender, NamedTextColor.RED, "Close '" + door.getName() + "' first — blocks are stored in the closed layout.");
+            return;
+        }
+        if (door.isAnimating()) {
+            msg(sender, NamedTextColor.RED, "'" + door.getName() + "' is moving right now.");
+            return;
+        }
+        SelectionManager.Selection sel = plugin.getSelectionManager().get(player.getUniqueId());
+        List<BlockVector3> cells = resolveSelection(player, sel);
+        if (cells == null) {
+            return;
+        }
+        if (!door.getWorld().equals(player.getWorld().getName())) {
+            msg(sender, NamedTextColor.RED, "'" + door.getName() + "' lives in " + door.getWorld() + ".");
+            return;
+        }
+        int before = door.blockCount();
+        door.setBlocks(cells);
+        plugin.saveDoors();
+        plugin.getPreviewManager().showSelection(player, player.getWorld(), cells,
+                PreviewManager.SELECTION_COLOR, plugin.getPreviewTicks());
+        msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' now has " + cells.size()
+                + " block(s) (was " + before + ").");
+        warnContainers(sender, player.getWorld(), cells);
+    }
+
+    private void preview(CommandSender sender, String[] args) {
+        if (!requireUse(sender) || !(sender instanceof Player player)) {
+            return;
+        }
+        Door door = resolve(sender, args);
+        if (door == null) {
+            return;
+        }
+        boolean opening = !door.isOpen();
+        if (args.length >= 3) {
+            String want = args[2].toLowerCase(Locale.ROOT);
+            switch (want) {
+                case "open", "opening" -> opening = true;
+                case "close", "closing", "shut" -> opening = false;
+                default -> {
+                    msg(sender, NamedTextColor.RED, "Preview direction must be 'open' or 'close'.");
+                    return;
+                }
+            }
+        }
+        int ghosts = plugin.getPreviewManager().showMotion(player, door, opening, plugin.getPreviewHoldTicks());
+        if (ghosts == 0) {
+            msg(sender, NamedTextColor.RED, "Nothing to preview — '" + door.getName() + "' has no solid blocks where it stands.");
+            return;
+        }
+        msg(sender, NamedTextColor.GOLD, "Ghost-running " + door.getName() + " " + (opening ? "open" : "closed")
+                + " with " + ghosts + " block(s). No real blocks are touched.");
+        List<BlockVector3> blocked = plugin.getPreviewManager().obstructions(door);
+        if (!blocked.isEmpty()) {
+            msg(sender, NamedTextColor.GOLD, "Heads up: " + blocked.size()
+                    + " block(s) sit where this door would land and would be overwritten by a real toggle.");
+        }
+    }
+
+    /**
+     * The blocks a player's selection resolves to, or null (with a message sent) if there is nothing usable.
+     */
+    private List<BlockVector3> resolveSelection(Player player, SelectionManager.Selection sel) {
+        World world = player.getWorld();
+        if (sel.world() != null && !sel.world().equals(world.getName())) {
+            msg(player, NamedTextColor.RED, "Your selection is in " + sel.world() + " — go back there or /door clear.");
+            return null;
+        }
+        List<BlockVector3> source;
+        if (sel.mode() == SelectionMode.REGION) {
+            if (!sel.regionComplete()) {
+                msg(player, NamedTextColor.RED, "Set both corners with the wand first (/door wand).");
+                return null;
+            }
+            source = sel.regionPositions();
+        } else {
+            source = sel.blocks();
+            if (source.isEmpty()) {
+                if (sel.regionComplete()) {
+                    msg(player, NamedTextColor.RED, "No blocks picked yet — right-click blocks with the wand, "
+                            + "or run /door add to take the whole corner box.");
+                } else {
+                    msg(player, NamedTextColor.RED, "No blocks picked yet — right-click the door's blocks with the wand.");
+                }
+                return null;
+            }
+        }
+        List<BlockVector3> solid = new ArrayList<>(source.size());
+        for (BlockVector3 cell : source) {
+            if (!world.getBlockAt(cell.x(), cell.y(), cell.z()).getType().isAir()) {
+                solid.add(cell);
+            }
+        }
+        if (solid.isEmpty()) {
+            msg(player, NamedTextColor.RED, "Every selected cell is air — there's nothing to move.");
+            return null;
+        }
+        int skipped = source.size() - solid.size();
+        if (skipped > 0) {
+            msg(player, NamedTextColor.GRAY, "Skipped " + skipped + " air cell(s).");
+        }
+        return solid;
+    }
+
+    private void warnContainers(CommandSender sender, World world, List<BlockVector3> cells) {
+        int filled = 0;
+        for (BlockVector3 cell : cells) {
+            if (DoorAnimator.isFilledContainer(world.getBlockAt(cell.x(), cell.y(), cell.z()))) {
+                filled++;
+            }
+        }
         if (filled > 0) {
             msg(sender, NamedTextColor.GOLD, "Heads up: this selection contains " + filled
                     + " container(s) with items. Door contents aren't preserved when it moves, so the door "
                     + "will refuse to move until they're emptied (see restrictions.block-filled-containers).");
         }
     }
+
+    // ---- doors -------------------------------------------------------------
 
     private void remove(CommandSender sender, String[] args) {
         if (!requireAdmin(sender)) {
@@ -148,7 +414,7 @@ public class DoorCommand implements TabExecutor {
         msg(sender, NamedTextColor.GOLD, "Doors:");
         for (Door door : plugin.getDoorManager().all()) {
             msg(sender, NamedTextColor.YELLOW, " - " + door.getName() + " (" + door.getWorld() + ", "
-                    + (door.isOpen() ? "open" : "closed") + ")");
+                    + door.blockCount() + " blocks, " + (door.isOpen() ? "open" : "closed") + ")");
         }
     }
 
@@ -160,10 +426,14 @@ public class DoorCommand implements TabExecutor {
         if (door == null) {
             return;
         }
+        BlockVector3 min = door.getMin();
+        BlockVector3 max = door.getMax();
+        long boxCells = (long) (max.x() - min.x() + 1) * (max.y() - min.y() + 1) * (max.z() - min.z() + 1);
         msg(sender, NamedTextColor.GOLD, "Door '" + door.getName() + "':");
         msg(sender, NamedTextColor.YELLOW, "  world: " + door.getWorld());
-        msg(sender, NamedTextColor.YELLOW, "  min: " + vec(door.getMin()) + "  max: " + vec(door.getMax()));
-        msg(sender, NamedTextColor.YELLOW, "  type: " + door.getType().name().toLowerCase());
+        msg(sender, NamedTextColor.YELLOW, "  blocks: " + door.blockCount() + " of " + boxCells + " in its bounding box");
+        msg(sender, NamedTextColor.YELLOW, "  bounds: " + min + "  to  " + max);
+        msg(sender, NamedTextColor.YELLOW, "  type: " + door.getType().name().toLowerCase(Locale.ROOT));
         if (door.getType() == DoorType.SWING) {
             msg(sender, NamedTextColor.YELLOW, "  hinge: " + door.getHingeX() + ", " + door.getHingeZ());
             msg(sender, NamedTextColor.YELLOW, "  direction: "
@@ -174,9 +444,9 @@ public class DoorCommand implements TabExecutor {
         }
         msg(sender, NamedTextColor.YELLOW, "  state: " + (door.isOpen() ? "open" : "closed"));
         msg(sender, NamedTextColor.YELLOW, "  redstone trigger: "
-                + (door.getRedstoneTrigger() == null ? "none" : vec(door.getRedstoneTrigger())));
+                + (door.getRedstoneTrigger() == null ? "none" : door.getRedstoneTrigger().toString()));
         msg(sender, NamedTextColor.YELLOW, "  floating trigger: "
-                + (door.getFloatingTrigger() == null ? "none" : vec(door.getFloatingTrigger())));
+                + (door.getFloatingTrigger() == null ? "none" : door.getFloatingTrigger().toString()));
     }
 
     private void hinge(CommandSender sender, String[] args) {
@@ -200,6 +470,7 @@ public class DoorCommand implements TabExecutor {
         door.setHinge(x, z);
         plugin.saveDoors();
         msg(sender, NamedTextColor.GREEN, "Hinge for '" + door.getName() + "' set to " + x + ", " + z + ".");
+        msg(sender, NamedTextColor.GRAY, "See it swing with /door preview " + door.getName() + ".");
     }
 
     private void direction(CommandSender sender, String[] args) {
@@ -291,21 +562,7 @@ public class DoorCommand implements TabExecutor {
         plugin.saveDoors();
         msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' will slide " + Math.abs(blocks)
                 + " block(s) " + (blocks >= 0 ? "up" : "down") + ".");
-    }
-
-    private int countFilledContainers(org.bukkit.World world, BlockVector3 min, BlockVector3 max) {
-        int count = 0;
-        for (int x = min.x(); x <= max.x(); x++) {
-            for (int y = min.y(); y <= max.y(); y++) {
-                for (int z = min.z(); z <= max.z(); z++) {
-                    if (com.coffeepng.animateddoors.door.DoorAnimator
-                            .isFilledContainer(world.getBlockAt(x, y, z))) {
-                        count++;
-                    }
-                }
-            }
-        }
-        return count;
+        msg(sender, NamedTextColor.GRAY, "See it move with /door preview " + door.getName() + ".");
     }
 
     private void trigger(CommandSender sender, String[] args) {
@@ -417,20 +674,20 @@ public class DoorCommand implements TabExecutor {
         sender.sendMessage(Component.text(text, color));
     }
 
-    private static String vec(BlockVector3 v) {
-        return v.x() + ", " + v.y() + ", " + v.z();
-    }
-
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 1) {
             return filter(SUBS, args[0]);
         }
         String sub = args[0].toLowerCase(Locale.ROOT);
-        if (args.length == 2 && List.of("remove", "info", "hinge", "type", "direction", "slide", "trigger", "toggle").contains(sub)) {
+        if (args.length == 2 && List.of("remove", "info", "hinge", "type", "direction", "slide",
+                "trigger", "toggle", "preview", "edit", "update").contains(sub)) {
             List<String> names = new ArrayList<>();
             plugin.getDoorManager().all().forEach(d -> names.add(d.getName()));
             return filter(names, args[1]);
+        }
+        if (args.length == 2 && sub.equals("mode")) {
+            return filter(List.of("block", "region"), args[1]);
         }
         if (args.length == 3 && sub.equals("type")) {
             return filter(List.of("swing", "portcullis"), args[2]);
@@ -440,6 +697,9 @@ public class DoorCommand implements TabExecutor {
         }
         if (args.length == 3 && sub.equals("trigger")) {
             return filter(List.of("redstone", "float", "clear"), args[2]);
+        }
+        if (args.length == 3 && sub.equals("preview")) {
+            return filter(List.of("open", "close"), args[2]);
         }
         return List.of();
     }

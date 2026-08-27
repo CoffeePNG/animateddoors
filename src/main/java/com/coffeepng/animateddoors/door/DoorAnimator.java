@@ -5,6 +5,7 @@ import com.coffeepng.animateddoors.model.BlockVector3;
 import com.coffeepng.animateddoors.model.Door;
 import com.coffeepng.animateddoors.model.DoorType;
 import com.coffeepng.animateddoors.util.BlockRotation;
+import com.coffeepng.animateddoors.util.DoorTransform;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -90,8 +91,6 @@ public class DoorAnimator {
         }
 
         // Spawn a display per block, sitting exactly over its (now empty) source cell.
-        float hingeCx = door.getHingeX() + 0.5f;
-        float hingeCz = door.getHingeZ() + 0.5f;
         List<BlockDisplay> displays = new ArrayList<>(datas.size());
         List<Vector3f> hingeRel = new ArrayList<>(datas.size());
         for (int i = 0; i < datas.size(); i++) {
@@ -104,7 +103,7 @@ public class DoorAnimator {
                 bd.setInterpolationDelay(0);
             });
             displays.add(display);
-            hingeRel.add(new Vector3f(hingeCx - cell.x(), 0f, hingeCz - cell.z()));
+            hingeRel.add(DoorTransform.hingeOffset(door, cell));
         }
 
         int stepTicks = Math.max(1, plugin.getStepTicks());
@@ -120,7 +119,7 @@ public class DoorAnimator {
             public void run() {
                 step++;
                 double t = (double) step / steps;
-                double eased = easeInOut(Math.min(1.0, t));
+                double eased = DoorTransform.easeInOut(Math.min(1.0, t));
                 float angle = (float) (eased * targetAngle);
                 float dy = (float) (eased * slideTotal);
                 for (int i = 0; i < displays.size(); i++) {
@@ -128,18 +127,7 @@ public class DoorAnimator {
                     if (!display.isValid()) {
                         continue;
                     }
-                    Matrix4f m;
-                    if (swing) {
-                        Vector3f h = hingeRel.get(i);
-                        // Rotate the cube about the hinge relative to the display origin.
-                        // JOML rotateY(-angle) matches the clockwise (x,z)->(-z,x) convention used everywhere.
-                        m = new Matrix4f()
-                                .translate(h.x, h.y, h.z)
-                                .rotateY(-angle)
-                                .translate(-h.x, -h.y, -h.z);
-                    } else {
-                        m = new Matrix4f().translate(0f, dy, 0f);
-                    }
+                    Matrix4f m = DoorTransform.keyframe(swing, hingeRel.get(i), angle, dy);
                     display.setInterpolationDelay(0);
                     display.setInterpolationDuration(stepTicks);
                     display.setTransformationMatrix(m);
@@ -181,9 +169,5 @@ public class DoorAnimator {
         door.setOpen(opening);
         door.setAnimating(false);
         plugin.saveDoors();
-    }
-
-    private static double easeInOut(double t) {
-        return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     }
 }

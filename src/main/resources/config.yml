@@ -22,3 +22,20 @@ restrictions:
 selection:
   # Material of the selection wand given by /door wand.
   wand-material: BLAZE_ROD
+  # How the wand starts out for each player:
+  #   block  - right-click adds a single block, left-click removes it (shift-click sets box
+  #            corners for /door add and /door sub). Only the blocks you pick belong to the door.
+  #   region - classic two-corner box; everything solid inside it becomes part of the door.
+  default-mode: block
+
+preview:
+  # Master switch for the glowing selection outlines and ghost motion previews.
+  enabled: true
+  # How long the /door finish preview stays up, in ticks.
+  duration-ticks: 200
+  # How long the outline shown after each wand click stays up, in ticks.
+  live-duration-ticks: 100
+  # How long a /door preview ghost lingers at its destination after the move, in ticks.
+  hold-ticks: 40
+  # Selections larger than this are not previewed (each block is a display entity).
+  max-blocks: 2000

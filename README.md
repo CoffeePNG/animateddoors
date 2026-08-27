@@ -24,7 +24,9 @@ folder and restart.
 
 ## How it works
 
-- A door is a box selection of blocks with a **type**: `swing` or `portcullis`.
+- A door is an explicit **set of blocks** you pick — not a box. Only the blocks you selected move, so a
+  wall, floor or roof that happens to share the door's bounding box is never dragged along. Each door
+  has a **type**: `swing` or `portcullis`.
   - **Swing** doors rotate 90° around a **hinge** (a vertical column) in a chosen direction. The client
     interpolates a true arc, and block facing (stairs, logs, fences, signs, …) is rotated to match,
     best-effort.
@@ -34,21 +36,47 @@ folder and restart.
 
 ## Quick start
 
-1. `/door wand` — grab the selection wand (a blaze rod by default).
-2. **Left-click** one corner of the door, **right-click** the opposite corner.
-3. `/door create mygate` — create the door from the selection (warns if the selection holds filled containers).
+1. `/door wand` — grab the selection wand (a blaze rod by default). It starts in **block mode**.
+2. **Right-click** each block that belongs to the door; **left-click** a block to drop it again. Every
+   pick refreshes a glowing outline so you can see the door taking shape.
+   - Big flat gate? **Shift-left-click** and **shift-right-click** two corners, then `/door add` to take
+     the whole box at once (air is skipped), and left-click the few blocks that don't belong.
+   - `/door sub` subtracts a corner box; `/door clear` starts over.
+   - Prefer the old behaviour? `/door mode region` gives you the plain two-corner box.
+3. `/door finish` — **preview**: the exact blocks that will move light up. Wrong ones in there? Left-click
+   them and run it again.
+4. `/door create mygate` — create the door from the previewed selection (warns if it holds filled containers).
 
 **For a swing door (default):**
 
-4. `/door hinge mygate` — look at the block the door should pivot around, then run it.
-5. `/door direction mygate cw` — set swing direction (`cw` or `ccw`; flip it if it swings the wrong way).
-6. `/door toggle mygate` — test the swing.
+5. `/door hinge mygate` — look at the block the door should pivot around, then run it.
+6. `/door direction mygate cw` — set swing direction (`cw` or `ccw`; flip it if it swings the wrong way).
+7. `/door preview mygate` — watch a **ghost** of the door swing, without touching a single real block.
+8. `/door toggle mygate` — do it for real.
 
 **For a portcullis:**
 
-4. `/door type mygate portcullis` — switch it to vertical-slide motion (defaults to sliding up by its own height).
-5. `/door slide mygate 5` — optional: set the distance (`+` up, `−` down). Setting a slide also makes it a portcullis.
-6. `/door toggle mygate` — test the slide.
+5. `/door type mygate portcullis` — switch it to vertical-slide motion (defaults to sliding up by its own height).
+6. `/door slide mygate 5` — optional: set the distance (`+` up, `−` down). Setting a slide also makes it a portcullis.
+7. `/door preview mygate` — ghost-run the slide first.
+8. `/door toggle mygate` — do it for real.
+
+### Previews
+
+Previews are drawn with `BlockDisplay` ghosts and are visible **only to you**; no real block is ever moved
+by one.
+
+- `/door finish` — outline the blocks currently selected. This is the "is my selection actually the door?"
+  check.
+- `/door preview <name> [open|close]` — ghost-run an existing door's move. Also reports how many blocks
+  sit where the door would land and would be overwritten by a real toggle.
+- The outline also refreshes automatically after each wand click (turn it off with `preview.enabled`).
+
+### Fixing an existing door
+
+`/door edit <name>` loads a door's blocks back into your selection (in block mode, outlined), so you can
+left-click the strays out and right-click missing blocks in. `/door update <name>` writes the selection
+back to the door. Both require the door to be closed.
 
 ### Triggers
 
@@ -66,7 +94,15 @@ folder and restart.
 | Command | Description |
 | --- | --- |
 | `/door wand` | Get the selection wand |
+| `/door mode <block\|region>` | Pick blocks one by one, or use a two-corner box |
+| `/door add` | Add the wand's corner box to your picks (skips air) |
+| `/door sub` | Subtract the wand's corner box from your picks |
+| `/door finish` | Preview exactly which blocks will move |
+| `/door clear` | Clear your selection |
 | `/door create <name>` | Create a door from your selection |
+| `/door edit <name>` | Load a door's blocks back into your selection |
+| `/door update <name>` | Replace a door's blocks with your selection |
+| `/door preview <name> [open\|close]` | Ghost-run the move without touching blocks |
 | `/door type <name> <swing\|portcullis>` | Choose swing or vertical-slide motion |
 | `/door hinge <name>` | (swing) Set the hinge to the block you're looking at |
 | `/door direction <name> <cw\|ccw>` | (swing) Set the opening direction |
@@ -99,6 +135,13 @@ triggers:
   cooldown-ticks: 10   # min ticks between toggles of the same door
 selection:
   wand-material: BLAZE_ROD
+  default-mode: block  # block = pick blocks individually, region = two-corner box
+preview:
+  enabled: true
+  duration-ticks: 200        # how long /door finish stays up
+  live-duration-ticks: 100   # outline shown after each wand click
+  hold-ticks: 40             # how long a ghost lingers at its destination
+  max-blocks: 2000           # selections bigger than this aren't previewed
 ```
 
 ## Known limitations (tier-two scope)
@@ -110,4 +153,7 @@ selection:
   first, or disable the guard with `restrictions.block-filled-containers: false`. Empty containers move
   freely. Sign text is still not preserved.
 - A move overwrites whatever occupies the destination cells, so leave the door's path (swing arc or slide
-  column) clear.
+  column) clear. `/door preview` counts the blocks in the way before you find out the hard way.
+- Doors created before per-block selection were stored as a box; they load as every block in that box and
+  are rewritten in the new per-block format on the next save. Run `/door edit`/`/door update` on them to
+  trim anything that was never part of the door.

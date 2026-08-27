@@ -8,6 +8,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -53,9 +54,7 @@ public class DoorStorage {
     private Door read(UUID id, ConfigurationSection sec) {
         String name = sec.getString("name", id.toString());
         String world = sec.getString("world");
-        BlockVector3 min = readVec(sec.getIntegerList("min"));
-        BlockVector3 max = readVec(sec.getIntegerList("max"));
-        Door door = new Door(id, name, world, min, max);
+        Door door = new Door(id, name, world, readBlocks(sec));
         List<Integer> hinge = sec.getIntegerList("hinge");
         if (hinge.size() >= 2) {
             door.setHinge(hinge.get(0), hinge.get(1));
@@ -78,6 +77,33 @@ public class DoorStorage {
         return door;
     }
 
+    /**
+     * Read a door's blocks. Doors saved before per-block selection only stored a min/max box, so
+     * fall back to filling that box — those doors keep working and get rewritten in the new format
+     * on the next save.
+     */
+    private List<BlockVector3> readBlocks(ConfigurationSection sec) {
+        List<String> raw = sec.getStringList("blocks");
+        if (!raw.isEmpty()) {
+            List<BlockVector3> out = new ArrayList<>(raw.size());
+            for (String entry : raw) {
+                out.add(BlockVector3.deserialize(entry));
+            }
+            return out;
+        }
+        BlockVector3 min = readVec(sec.getIntegerList("min"));
+        BlockVector3 max = readVec(sec.getIntegerList("max"));
+        List<BlockVector3> out = new ArrayList<>();
+        for (int x = min.x(); x <= max.x(); x++) {
+            for (int y = min.y(); y <= max.y(); y++) {
+                for (int z = min.z(); z <= max.z(); z++) {
+                    out.add(new BlockVector3(x, y, z));
+                }
+            }
+        }
+        return out;
+    }
+
     public void saveAll(DoorManager manager) {
         YamlConfiguration yaml = new YamlConfiguration();
         for (Door door : manager.all()) {
@@ -94,6 +120,8 @@ public class DoorStorage {
         String base = "doors." + door.getId();
         yaml.set(base + ".name", door.getName());
         yaml.set(base + ".world", door.getWorld());
+        yaml.set(base + ".blocks", blockList(door));
+        // Bounding box, written for readability/tooling; blocks are the source of truth.
         yaml.set(base + ".min", vecList(door.getMin()));
         yaml.set(base + ".max", vecList(door.getMax()));
         yaml.set(base + ".hinge", List.of(door.getHingeX(), door.getHingeZ()));
@@ -112,6 +140,14 @@ public class DoorStorage {
             throw new IllegalArgumentException("expected 3 coordinates, got " + list.size());
         }
         return new BlockVector3(list.get(0), list.get(1), list.get(2));
+    }
+
+    private static List<String> blockList(Door door) {
+        List<String> out = new ArrayList<>(door.blockCount());
+        for (BlockVector3 pos : door.closedPositions()) {
+            out.add(pos.serialize());
+        }
+        return out;
     }
 
     private static List<Integer> vecList(BlockVector3 v) {

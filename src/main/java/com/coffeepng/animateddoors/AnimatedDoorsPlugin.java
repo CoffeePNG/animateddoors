@@ -9,15 +9,19 @@ import com.coffeepng.animateddoors.listener.RedstoneListener;
 import com.coffeepng.animateddoors.listener.PlayerListener;
 import com.coffeepng.animateddoors.model.BlockVector3;
 import com.coffeepng.animateddoors.model.Door;
+import com.coffeepng.animateddoors.preview.PreviewManager;
 import com.coffeepng.animateddoors.selection.SelectionManager;
+import com.coffeepng.animateddoors.selection.SelectionMode;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Interaction;
+import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.List;
 import java.util.UUID;
 
 public class AnimatedDoorsPlugin extends JavaPlugin {
@@ -26,6 +30,7 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
     private DoorStorage doorStorage;
     private DoorAnimator doorAnimator;
     private SelectionManager selectionManager;
+    private PreviewManager previewManager;
 
     private NamespacedKey doorKey;
 
@@ -35,6 +40,11 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
     private boolean clickToToggle;
     private boolean blockFilledContainers;
     private String wandMaterial;
+    private boolean previewEnabled;
+    private int previewTicks;
+    private int previewLiveTicks;
+    private int previewHoldTicks;
+    private int previewMaxBlocks;
 
     @Override
     public void onEnable() {
@@ -46,6 +56,8 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
         this.doorStorage = new DoorStorage(getDataFolder(), getLogger());
         this.doorAnimator = new DoorAnimator(this);
         this.selectionManager = new SelectionManager();
+        this.selectionManager.setDefaultMode(readDefaultSelectionMode());
+        this.previewManager = new PreviewManager(this);
 
         doorStorage.loadInto(doorManager);
 
@@ -64,6 +76,9 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (previewManager != null) {
+            previewManager.cancelAll();
+        }
         // Remove our interaction entities so they don't accumulate across restarts.
         for (World world : getServer().getWorlds()) {
             for (Entity entity : world.getEntities()) {
@@ -84,11 +99,54 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
         this.clickToToggle = getConfig().getBoolean("triggers.click-door-to-toggle", true);
         this.blockFilledContainers = getConfig().getBoolean("restrictions.block-filled-containers", true);
         this.wandMaterial = getConfig().getString("selection.wand-material", "BLAZE_ROD");
+        this.previewEnabled = getConfig().getBoolean("preview.enabled", true);
+        this.previewTicks = getConfig().getInt("preview.duration-ticks", 200);
+        this.previewLiveTicks = getConfig().getInt("preview.live-duration-ticks", 100);
+        this.previewHoldTicks = getConfig().getInt("preview.hold-ticks", 40);
+        this.previewMaxBlocks = getConfig().getInt("preview.max-blocks", 2000);
+    }
+
+    private SelectionMode readDefaultSelectionMode() {
+        SelectionMode mode = SelectionMode.fromString(getConfig().getString("selection.default-mode", "block"));
+        if (mode == null) {
+            getLogger().warning("selection.default-mode is not 'block' or 'region'; falling back to block.");
+            return SelectionMode.BLOCK;
+        }
+        return mode;
     }
 
     public void reload() {
         reloadConfig();
         readConfigValues();
+        selectionManager.setDefaultMode(readDefaultSelectionMode());
+    }
+
+    // ---- Previews ----------------------------------------------------------
+
+    /**
+     * Refresh the glowing outline of a player's in-progress selection, so it is always visible
+     * which blocks would become part of the door.
+     */
+    public void previewSelection(Player player, SelectionManager.Selection selection) {
+        if (!previewEnabled) {
+            return;
+        }
+        List<BlockVector3> cells = selection.mode() == SelectionMode.REGION
+                ? selection.regionPositions()
+                : selection.blocks();
+        if (cells.isEmpty()) {
+            previewManager.cancel(player);
+            return;
+        }
+        if (cells.size() > previewMaxBlocks) {
+            player.sendMessage(net.kyori.adventure.text.Component.text(
+                    "Selection is " + cells.size() + " blocks — too big to preview (preview.max-blocks = "
+                            + previewMaxBlocks + ").",
+                    net.kyori.adventure.text.format.NamedTextColor.GRAY));
+            return;
+        }
+        previewManager.showSelection(player, player.getWorld(), cells,
+                PreviewManager.SELECTION_COLOR, previewLiveTicks);
     }
 
     // ---- Floating triggers -------------------------------------------------
@@ -193,6 +251,30 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
 
     public SelectionManager getSelectionManager() {
         return selectionManager;
+    }
+
+    public PreviewManager getPreviewManager() {
+        return previewManager;
+    }
+
+    public boolean isPreviewEnabled() {
+        return previewEnabled;
+    }
+
+    public int getPreviewTicks() {
+        return previewTicks;
+    }
+
+    public int getPreviewLiveTicks() {
+        return previewLiveTicks;
+    }
+
+    public int getPreviewHoldTicks() {
+        return previewHoldTicks;
+    }
+
+    public int getPreviewMaxBlocks() {
+        return previewMaxBlocks;
     }
 
     public NamespacedKey getDoorKey() {

@@ -51,6 +51,12 @@ public class DoorManager {
             if (!door.getWorld().equals(world)) {
                 continue;
             }
+            if (!door.isOpen()) {
+                if (door.containsClosed(block)) {
+                    return Optional.of(door);
+                }
+                continue;
+            }
             for (BlockVector3 pos : currentPositions(door)) {
                 if (pos.equals(block)) {
                     return Optional.of(door);

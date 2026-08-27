@@ -1,14 +1,19 @@
 package com.coffeepng.animateddoors.model;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * A single animated door.
  *
- * <p>The door footprint is always stored in its CLOSED layout ({@link #min}..{@link #max}).
- * Open-state world positions are derived by rotating the closed positions around the hinge.</p>
+ * <p>A door is an explicit <em>set</em> of block positions, not a box: only the blocks that were
+ * actually picked belong to the door, so a wall or floor that merely shares the bounding box is
+ * never dragged along. The set is always stored in the door's CLOSED layout; open-state world
+ * positions are derived from it by {@code DoorGeometry}.</p>
  */
 public class Door {
 
@@ -16,6 +21,10 @@ public class Door {
     private String name;
     private String world;
 
+    /** The door's blocks in their closed layout. Insertion-ordered so previews look stable. */
+    private final Set<BlockVector3> blocks = new LinkedHashSet<>();
+
+    /** Cached bounding box of {@link #blocks}, kept in sync by {@link #setBlocks}. */
     private BlockVector3 min;
     private BlockVector3 max;
 
@@ -41,27 +50,56 @@ public class Door {
     // Runtime-only state.
     private transient boolean animating;
 
-    public Door(UUID id, String name, String world, BlockVector3 min, BlockVector3 max) {
+    public Door(UUID id, String name, String world, Collection<BlockVector3> blocks) {
         this.id = id;
         this.name = name;
         this.world = world;
-        this.min = min;
-        this.max = max;
+        setBlocks(blocks);
         this.hingeX = min.x();
         this.hingeZ = min.z();
     }
 
-    /** Every block position of the door in its closed layout (inclusive box). */
-    public List<BlockVector3> closedPositions() {
-        List<BlockVector3> out = new ArrayList<>();
-        for (int x = min.x(); x <= max.x(); x++) {
-            for (int y = min.y(); y <= max.y(); y++) {
-                for (int z = min.z(); z <= max.z(); z++) {
-                    out.add(new BlockVector3(x, y, z));
-                }
-            }
+    /** Replace the door's block set. Must not be empty. */
+    public void setBlocks(Collection<BlockVector3> newBlocks) {
+        if (newBlocks == null || newBlocks.isEmpty()) {
+            throw new IllegalArgumentException("a door needs at least one block");
         }
-        return out;
+        blocks.clear();
+        blocks.addAll(newBlocks);
+        recomputeBounds();
+    }
+
+    private void recomputeBounds() {
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (BlockVector3 pos : blocks) {
+            minX = Math.min(minX, pos.x());
+            minY = Math.min(minY, pos.y());
+            minZ = Math.min(minZ, pos.z());
+            maxX = Math.max(maxX, pos.x());
+            maxY = Math.max(maxY, pos.y());
+            maxZ = Math.max(maxZ, pos.z());
+        }
+        this.min = new BlockVector3(minX, minY, minZ);
+        this.max = new BlockVector3(maxX, maxY, maxZ);
+    }
+
+    /** Every block position of the door in its closed layout. */
+    public List<BlockVector3> closedPositions() {
+        return new ArrayList<>(blocks);
+    }
+
+    /** True if the given closed-layout position belongs to this door. */
+    public boolean containsClosed(BlockVector3 pos) {
+        return blocks.contains(pos);
+    }
+
+    public int blockCount() {
+        return blocks.size();
     }
 
     public UUID getId() {
@@ -84,20 +122,14 @@ public class Door {
         this.world = world;
     }
 
+    /** Minimum corner of the door's bounding box (derived from its blocks). */
     public BlockVector3 getMin() {
         return min;
     }
 
-    public void setMin(BlockVector3 min) {
-        this.min = min;
-    }
-
+    /** Maximum corner of the door's bounding box (derived from its blocks). */
     public BlockVector3 getMax() {
         return max;
-    }
-
-    public void setMax(BlockVector3 max) {
-        this.max = max;
     }
 
     public int getHingeX() {

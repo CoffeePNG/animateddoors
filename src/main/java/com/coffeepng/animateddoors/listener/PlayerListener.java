@@ -5,6 +5,7 @@ import com.coffeepng.animateddoors.door.ToggleResult;
 import com.coffeepng.animateddoors.model.BlockVector3;
 import com.coffeepng.animateddoors.model.Door;
 import com.coffeepng.animateddoors.selection.SelectionManager;
+import com.coffeepng.animateddoors.selection.SelectionMode;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -16,6 +17,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
@@ -88,14 +90,57 @@ public class PlayerListener implements Listener {
     private void handleWand(PlayerInteractEvent event, Player player, Block block) {
         event.setCancelled(true);
         SelectionManager.Selection selection = plugin.getSelectionManager().get(player.getUniqueId());
-        BlockVector3 pos = new BlockVector3(block.getX(), block.getY(), block.getZ());
-        if (event.getAction() == Action.LEFT_CLICK_BLOCK) {
-            selection.pos1 = pos;
-            player.sendMessage(Component.text("Position 1 set to " + describe(pos), NamedTextColor.AQUA));
-        } else if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
-            selection.pos2 = pos;
-            player.sendMessage(Component.text("Position 2 set to " + describe(pos), NamedTextColor.AQUA));
+        if (selection.bindWorld(block.getWorld().getName())) {
+            player.sendMessage(Component.text("Selection reset — you changed worlds.", NamedTextColor.GRAY));
         }
+        BlockVector3 pos = new BlockVector3(block.getX(), block.getY(), block.getZ());
+        boolean left = event.getAction() == Action.LEFT_CLICK_BLOCK;
+        boolean right = event.getAction() == Action.RIGHT_CLICK_BLOCK;
+        if (!left && !right) {
+            return;
+        }
+
+        // In block mode the plain clicks pick blocks and the shifted ones set box corners,
+        // so a big flat door can still be grabbed in one go with /door add.
+        boolean corners = selection.mode() == SelectionMode.REGION || player.isSneaking();
+        if (corners) {
+            if (left) {
+                selection.pos1 = pos;
+                player.sendMessage(Component.text("Corner 1 set to " + pos, NamedTextColor.AQUA));
+            } else {
+                selection.pos2 = pos;
+                player.sendMessage(Component.text("Corner 2 set to " + pos, NamedTextColor.AQUA));
+            }
+            if (selection.mode() == SelectionMode.REGION && selection.regionComplete()) {
+                plugin.previewSelection(player, selection);
+            } else if (selection.regionComplete()) {
+                player.sendMessage(Component.text("Box ready — /door add to take it, /door sub to drop it.",
+                        NamedTextColor.GRAY));
+            }
+            return;
+        }
+
+        if (right) {
+            if (selection.add(pos)) {
+                player.sendMessage(Component.text("Added " + pos + " (" + selection.size() + " selected)",
+                        NamedTextColor.AQUA));
+            } else {
+                player.sendMessage(Component.text("Already selected: " + pos, NamedTextColor.GRAY));
+            }
+        } else {
+            if (selection.remove(pos)) {
+                player.sendMessage(Component.text("Removed " + pos + " (" + selection.size() + " selected)",
+                        NamedTextColor.AQUA));
+            } else {
+                player.sendMessage(Component.text("Not selected: " + pos, NamedTextColor.GRAY));
+            }
+        }
+        plugin.previewSelection(player, selection);
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        plugin.getPreviewManager().cancel(event.getPlayer());
     }
 
     private void toggle(Player player, Door door) {
@@ -111,9 +156,5 @@ public class PlayerListener implements Listener {
         }
         Material wand = Material.matchMaterial(plugin.getWandMaterial());
         return wand != null && item.getType() == wand;
-    }
-
-    private static String describe(BlockVector3 pos) {
-        return pos.x() + ", " + pos.y() + ", " + pos.z();
     }
 }
