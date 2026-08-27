@@ -19,6 +19,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
@@ -86,6 +87,14 @@ public class DoorAnimator {
 
         door.setAnimating(true);
 
+        // Freeze block updates on every cell this move touches, so nothing external (fluids,
+        // gravity, scheduled ticks, other plugins) rewrites the door mid-flight. The door's own
+        // writes below already pass applyPhysics = false, so it never notifies its neighbours.
+        List<BlockVector3> guardedCells = new ArrayList<>(new LinkedHashSet<>(concat(fromCells, toCells)));
+        if (plugin.isSuppressBlockUpdates()) {
+            plugin.getPhysicsGuard().guard(door.getWorld(), guardedCells);
+        }
+
         // Net rotation applied to block facing over this move (0 for portcullis).
         int openQuarters = DoorGeometry.openingQuarterTurns(door);
         int finalQuarters = opening ? openQuarters : -openQuarters;
@@ -141,7 +150,8 @@ public class DoorAnimator {
                     cancel();
                     // Let the final interpolation land, then swap real blocks back in.
                     plugin.getServer().getScheduler().runTaskLater(plugin,
-                            () -> finish(world, displays, datas, toCells, door, opening, finalQuarters),
+                            () -> finish(world, displays, datas, toCells, door, opening, finalQuarters,
+                                    guardedCells),
                             stepTicks + 1L);
                 }
             }
@@ -159,8 +169,16 @@ public class DoorAnimator {
         return false;
     }
 
+    private static List<BlockVector3> concat(List<BlockVector3> a, List<BlockVector3> b) {
+        List<BlockVector3> out = new ArrayList<>(a.size() + b.size());
+        out.addAll(a);
+        out.addAll(b);
+        return out;
+    }
+
     private void finish(World world, List<BlockDisplay> displays, List<BlockData> datas,
-                        List<BlockVector3> toCells, Door door, boolean opening, int totalQuarters) {
+                        List<BlockVector3> toCells, Door door, boolean opening, int totalQuarters,
+                        List<BlockVector3> guardedCells) {
         for (BlockDisplay display : displays) {
             if (display.isValid()) {
                 display.remove();
@@ -174,5 +192,16 @@ public class DoorAnimator {
         door.setOpen(opening);
         door.setAnimating(false);
         plugin.saveDoors();
+
+        // Hold the guard a little longer: updates queued during the move land on the tick after it.
+        if (plugin.isSuppressBlockUpdates()) {
+            int grace = Math.max(0, plugin.getUpdateGuardGraceTicks());
+            if (grace == 0) {
+                plugin.getPhysicsGuard().release(door.getWorld(), guardedCells);
+            } else {
+                plugin.getServer().getScheduler().runTaskLater(plugin,
+                        () -> plugin.getPhysicsGuard().release(door.getWorld(), guardedCells), grace);
+            }
+        }
     }
 }

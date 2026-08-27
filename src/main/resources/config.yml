@@ -36,6 +36,15 @@ restrictions:
   #   overwrite - the door moves anyway and destroys whatever is there
   obstruction: block
 
+  # Keep the world from reacting to a door while it moves. The door's own block writes never
+  # notify their neighbours, so torches, redstone, fences and attached blocks around it are left
+  # exactly as they are. This additionally freezes block updates ON the cells the door passes
+  # through for the length of the move, so fluids, falling sand, scheduled ticks and other plugins
+  # can't rewrite them mid-animation. Turn it off to let vanilla behave normally.
+  suppress-block-updates: true
+  # Extra ticks to keep that freeze after the blocks land, catching updates queued during the move.
+  update-guard-grace-ticks: 2
+
 selection:
   # Material of the selection wand given by /door wand.
   wand-material: BLAZE_ROD

@@ -147,7 +147,9 @@ power-block:
   click-to-toggle: true    # right-clicking the power block toggles the door
 restrictions:
   block-filled-containers: true
-  obstruction: block       # block = refuse to move, overwrite = destroy what's in the way
+  obstruction: block             # block = refuse to move, overwrite = destroy what's in the way
+  suppress-block-updates: true   # don't let the world react to a door while it moves
+  update-guard-grace-ticks: 2
 selection:
   wand-material: BLAZE_ROD
   default-mode: block  # block = pick blocks individually, region = two-corner box
@@ -158,6 +160,24 @@ preview:
   hold-ticks: 40             # how long a ghost lingers at its destination
   max-blocks: 2000           # selections bigger than this aren't previewed
 ```
+
+### Block updates
+
+A moving door does not update its surroundings. Its block writes are made with physics disabled, so
+removing and placing the door's blocks never notifies neighbouring blocks: torches, ladders, signs,
+fences, rails and redstone next to the door are left exactly as they are, sand and gravel above it stay
+put, and nothing cascades.
+
+On top of that, the cells the door passes through are frozen for the length of the move (plus
+`update-guard-grace-ticks`), so updates coming from the *other* direction — fluids running into the
+doorway, falling blocks landing in it, vanilla scheduled ticks, other plugins reacting — are cancelled
+instead of rewriting the door mid-animation. Overlapping doors are reference-counted, and when no door is
+moving the check is a single boolean read per event.
+
+The trade-off is the point: because nothing is notified, a block that *relied* on a door block for support
+— a torch stuck to the gate, a carpet on top of it — stays floating in place rather than popping off, until
+some unrelated update touches it. Set `restrictions.suppress-block-updates: false` if you'd rather vanilla
+behave normally around the door.
 
 ## Known limitations (tier-two scope)
 

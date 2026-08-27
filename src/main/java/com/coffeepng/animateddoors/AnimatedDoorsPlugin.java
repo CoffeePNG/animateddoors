@@ -4,7 +4,9 @@ import com.coffeepng.animateddoors.command.DoorCommand;
 import com.coffeepng.animateddoors.door.DoorAnimator;
 import com.coffeepng.animateddoors.door.DoorManager;
 import com.coffeepng.animateddoors.door.DoorStorage;
+import com.coffeepng.animateddoors.door.PhysicsGuard;
 import com.coffeepng.animateddoors.door.ToggleResult;
+import com.coffeepng.animateddoors.listener.PhysicsGuardListener;
 import com.coffeepng.animateddoors.listener.PowerBlockListener;
 import com.coffeepng.animateddoors.listener.RedstoneListener;
 import com.coffeepng.animateddoors.listener.PlayerListener;
@@ -33,6 +35,7 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
     private DoorAnimator doorAnimator;
     private SelectionManager selectionManager;
     private PreviewManager previewManager;
+    private PhysicsGuard physicsGuard;
 
     private NamespacedKey doorKey;
 
@@ -42,6 +45,8 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
     private boolean clickToToggle;
     private boolean blockFilledContainers;
     private boolean blockOnObstruction;
+    private boolean suppressBlockUpdates;
+    private int updateGuardGraceTicks;
     private String wandMaterial;
     private Material powerBlockMaterial;
     private boolean requirePowerBlockMaterial;
@@ -65,6 +70,7 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
         this.selectionManager = new SelectionManager();
         this.selectionManager.setDefaultMode(readDefaultSelectionMode());
         this.previewManager = new PreviewManager(this);
+        this.physicsGuard = new PhysicsGuard();
 
         doorStorage.loadInto(doorManager);
 
@@ -75,6 +81,7 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
         getServer().getPluginManager().registerEvents(new RedstoneListener(this), this);
         getServer().getPluginManager().registerEvents(new PowerBlockListener(this), this);
+        getServer().getPluginManager().registerEvents(new PhysicsGuardListener(this), this);
 
         // Rebuild floating triggers once worlds are guaranteed to be loaded.
         getServer().getScheduler().runTaskLater(this, this::rebuildFloatingTriggers, 20L);
@@ -86,6 +93,9 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
     public void onDisable() {
         if (previewManager != null) {
             previewManager.cancelAll();
+        }
+        if (physicsGuard != null) {
+            physicsGuard.clear();
         }
         // Remove our interaction entities so they don't accumulate across restarts.
         for (World world : getServer().getWorlds()) {
@@ -107,6 +117,8 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
         this.clickToToggle = getConfig().getBoolean("triggers.click-door-to-toggle", true);
         this.blockFilledContainers = getConfig().getBoolean("restrictions.block-filled-containers", true);
         this.blockOnObstruction = readObstructionPolicy();
+        this.suppressBlockUpdates = getConfig().getBoolean("restrictions.suppress-block-updates", true);
+        this.updateGuardGraceTicks = getConfig().getInt("restrictions.update-guard-grace-ticks", 2);
         this.powerBlockMaterial = readPowerBlockMaterial();
         this.requirePowerBlockMaterial = getConfig().getBoolean("power-block.require-material", true);
         this.protectPowerBlocks = getConfig().getBoolean("power-block.protect", true);
@@ -313,6 +325,19 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
 
     public PreviewManager getPreviewManager() {
         return previewManager;
+    }
+
+    public PhysicsGuard getPhysicsGuard() {
+        return physicsGuard;
+    }
+
+    /** True when block updates are frozen on a door's cells while it moves. */
+    public boolean isSuppressBlockUpdates() {
+        return suppressBlockUpdates;
+    }
+
+    public int getUpdateGuardGraceTicks() {
+        return updateGuardGraceTicks;
     }
 
     public boolean isPreviewEnabled() {
