@@ -1,4 +1,4 @@
-package com.coffeepng.animateddoors.model;
+package com.coffeepng.dynamicdoors.model;
 
 import java.util.Locale;
 

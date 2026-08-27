@@ -1,7 +1,7 @@
-package com.coffeepng.animateddoors.door;
+package com.coffeepng.dynamicdoors.door;
 
-import com.coffeepng.animateddoors.model.BlockVector3;
-import com.coffeepng.animateddoors.model.Door;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.Door;
 
 import java.util.ArrayList;
 import java.util.Collection;

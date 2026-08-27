@@ -1,7 +1,7 @@
-package com.coffeepng.animateddoors.util;
+package com.coffeepng.dynamicdoors.util;
 
-import com.coffeepng.animateddoors.model.BlockVector3;
-import com.coffeepng.animateddoors.model.Door;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.Door;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 

@@ -1,4 +1,4 @@
-package com.coffeepng.animateddoors.door;
+package com.coffeepng.dynamicdoors.door;
 
 /**
  * Outcome of attempting to toggle a door.

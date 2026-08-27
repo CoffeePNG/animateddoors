@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.coffeepng</groupId>
-    <artifactId>animateddoors</artifactId>
+    <artifactId>dynamicdoors</artifactId>
     <version>0.1.0</version>
     <packaging>jar</packaging>
 
-    <name>AnimatedDoors</name>
+    <name>DynamicDoors</name>
     <description>Usable animated doors for Paper/Purpur, triggered by redstone or floating click-triggers.</description>
 
     <properties>
@@ -35,7 +35,7 @@
     </dependencies>
 
     <build>
-        <finalName>AnimatedDoors-${project.version}</finalName>
+        <finalName>DynamicDoors-${project.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

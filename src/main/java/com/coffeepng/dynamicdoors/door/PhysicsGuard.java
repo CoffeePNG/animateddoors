@@ -1,6 +1,6 @@
-package com.coffeepng.animateddoors.door;
+package com.coffeepng.dynamicdoors.door;
 
-import com.coffeepng.animateddoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
 
 import java.util.Collection;
 import java.util.HashMap;

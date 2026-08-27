@@ -1,7 +1,7 @@
-package com.coffeepng.animateddoors.listener;
+package com.coffeepng.dynamicdoors.listener;
 
-import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
-import com.coffeepng.animateddoors.door.PhysicsGuard;
+import com.coffeepng.dynamicdoors.DynamicDoorsPlugin;
+import com.coffeepng.dynamicdoors.door.PhysicsGuard;
 import org.bukkit.block.Block;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.event.EventHandler;
@@ -19,9 +19,9 @@ import org.bukkit.event.entity.EntityChangeBlockEvent;
  */
 public class PhysicsGuardListener implements Listener {
 
-    private final AnimatedDoorsPlugin plugin;
+    private final DynamicDoorsPlugin plugin;
 
-    public PhysicsGuardListener(AnimatedDoorsPlugin plugin) {
+    public PhysicsGuardListener(DynamicDoorsPlugin plugin) {
         this.plugin = plugin;
     }
 

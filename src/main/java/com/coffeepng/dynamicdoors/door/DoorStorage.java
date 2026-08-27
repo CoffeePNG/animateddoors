@@ -1,8 +1,8 @@
-package com.coffeepng.animateddoors.door;
+package com.coffeepng.dynamicdoors.door;
 
-import com.coffeepng.animateddoors.model.BlockVector3;
-import com.coffeepng.animateddoors.model.Door;
-import com.coffeepng.animateddoors.model.DoorType;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.Door;
+import com.coffeepng.dynamicdoors.model.DoorType;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 

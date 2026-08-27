@@ -1,20 +1,20 @@
-package com.coffeepng.animateddoors;
+package com.coffeepng.dynamicdoors;
 
-import com.coffeepng.animateddoors.command.DoorCommand;
-import com.coffeepng.animateddoors.door.DoorAnimator;
-import com.coffeepng.animateddoors.door.DoorManager;
-import com.coffeepng.animateddoors.door.DoorStorage;
-import com.coffeepng.animateddoors.door.PhysicsGuard;
-import com.coffeepng.animateddoors.door.ToggleResult;
-import com.coffeepng.animateddoors.listener.PhysicsGuardListener;
-import com.coffeepng.animateddoors.listener.PowerBlockListener;
-import com.coffeepng.animateddoors.listener.RedstoneListener;
-import com.coffeepng.animateddoors.listener.PlayerListener;
-import com.coffeepng.animateddoors.model.BlockVector3;
-import com.coffeepng.animateddoors.model.Door;
-import com.coffeepng.animateddoors.preview.PreviewManager;
-import com.coffeepng.animateddoors.selection.SelectionManager;
-import com.coffeepng.animateddoors.selection.SelectionMode;
+import com.coffeepng.dynamicdoors.command.DoorCommand;
+import com.coffeepng.dynamicdoors.door.DoorAnimator;
+import com.coffeepng.dynamicdoors.door.DoorManager;
+import com.coffeepng.dynamicdoors.door.DoorStorage;
+import com.coffeepng.dynamicdoors.door.PhysicsGuard;
+import com.coffeepng.dynamicdoors.door.ToggleResult;
+import com.coffeepng.dynamicdoors.listener.PhysicsGuardListener;
+import com.coffeepng.dynamicdoors.listener.PowerBlockListener;
+import com.coffeepng.dynamicdoors.listener.RedstoneListener;
+import com.coffeepng.dynamicdoors.listener.PlayerListener;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.Door;
+import com.coffeepng.dynamicdoors.preview.PreviewManager;
+import com.coffeepng.dynamicdoors.selection.SelectionManager;
+import com.coffeepng.dynamicdoors.selection.SelectionMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -28,7 +28,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.List;
 import java.util.UUID;
 
-public class AnimatedDoorsPlugin extends JavaPlugin {
+public class DynamicDoorsPlugin extends JavaPlugin {
 
     private DoorManager doorManager;
     private DoorStorage doorStorage;
@@ -86,7 +86,7 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
         // Rebuild floating triggers once worlds are guaranteed to be loaded.
         getServer().getScheduler().runTaskLater(this, this::rebuildFloatingTriggers, 20L);
 
-        getLogger().info("AnimatedDoors enabled.");
+        getLogger().info("DynamicDoors enabled.");
     }
 
     @Override

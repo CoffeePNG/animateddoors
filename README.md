@@ -1,4 +1,4 @@
-# AnimatedDoors
+# DynamicDoors
 
 Usable animated doors for **Paper / Purpur 1.21.11** (Java 21). Doors either **swing** open around a
 vertical hinge or slide up/down as a **portcullis**, animated smoothly with `BlockDisplay`, and can be
@@ -19,7 +19,7 @@ code with it.
 mvn package
 ```
 
-The plugin jar is produced at `target/AnimatedDoors-0.1.0.jar`. Drop it in your server's `plugins/`
+The plugin jar is produced at `target/DynamicDoors-0.1.0.jar`. Drop it in your server's `plugins/`
 folder and restart.
 
 ## How it works
@@ -121,15 +121,24 @@ back to the door. Both require the door to be closed.
 | `/door remove <name>` | Delete a door |
 | `/door reload` | Reload the config |
 
-Aliases: `/adoor`, `/animateddoor`.
+Aliases: `/ddoor`, `/dynamicdoor`.
+
+## Upgrading from AnimatedDoors
+
+The plugin was renamed, so a few names moved with it:
+
+- Data folder: `plugins/AnimatedDoors/` → `plugins/DynamicDoors/`. Copy your old `doors.yml` and
+  `config.yml` across (the door format is unchanged).
+- Permissions: `animateddoors.*` → `dynamicdoors.*`. Update your permission plugin's groups.
+- Command aliases: `/adoor` and `/animateddoor` are now `/ddoor` and `/dynamicdoor`. `/door` is unchanged.
 
 ## Permissions
 
 | Permission | Default | Grants |
 | --- | --- | --- |
-| `animateddoors.admin` | op | Create/edit/remove doors (includes `use`) |
-| `animateddoors.use` | op | Commands like `list` and `info` |
-| `animateddoors.toggle` | everyone | Toggle doors via triggers / clicking |
+| `dynamicdoors.admin` | op | Create/edit/remove doors (includes `use`) |
+| `dynamicdoors.use` | op | Commands like `list` and `info` |
+| `dynamicdoors.toggle` | everyone | Toggle doors via triggers / clicking |
 
 ## Configuration (`config.yml`)
 

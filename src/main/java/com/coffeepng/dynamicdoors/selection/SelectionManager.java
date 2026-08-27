@@ -1,6 +1,6 @@
-package com.coffeepng.animateddoors.selection;
+package com.coffeepng.dynamicdoors.selection;
 
-import com.coffeepng.animateddoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
 
 import java.util.ArrayList;
 import java.util.Collection;

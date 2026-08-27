@@ -1,12 +1,12 @@
-package com.coffeepng.animateddoors.preview;
+package com.coffeepng.dynamicdoors.preview;
 
-import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
-import com.coffeepng.animateddoors.door.DoorGeometry;
-import com.coffeepng.animateddoors.door.DoorObstruction;
-import com.coffeepng.animateddoors.model.BlockVector3;
-import com.coffeepng.animateddoors.model.Door;
-import com.coffeepng.animateddoors.model.DoorType;
-import com.coffeepng.animateddoors.util.DoorTransform;
+import com.coffeepng.dynamicdoors.DynamicDoorsPlugin;
+import com.coffeepng.dynamicdoors.door.DoorGeometry;
+import com.coffeepng.dynamicdoors.door.DoorObstruction;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.Door;
+import com.coffeepng.dynamicdoors.model.DoorType;
+import com.coffeepng.dynamicdoors.util.DoorTransform;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -50,10 +50,10 @@ public class PreviewManager {
 
     private static final float HIGHLIGHT_SCALE = 1.02f;
 
-    private final AnimatedDoorsPlugin plugin;
+    private final DynamicDoorsPlugin plugin;
     private final Map<UUID, Session> sessions = new HashMap<>();
 
-    public PreviewManager(AnimatedDoorsPlugin plugin) {
+    public PreviewManager(DynamicDoorsPlugin plugin) {
         this.plugin = plugin;
     }
 

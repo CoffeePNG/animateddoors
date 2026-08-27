@@ -1,8 +1,8 @@
-package com.coffeepng.animateddoors.listener;
+package com.coffeepng.dynamicdoors.listener;
 
-import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
-import com.coffeepng.animateddoors.model.BlockVector3;
-import com.coffeepng.animateddoors.model.Door;
+import com.coffeepng.dynamicdoors.DynamicDoorsPlugin;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.Door;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.block.Block;
@@ -24,9 +24,9 @@ import java.util.List;
  */
 public class PowerBlockListener implements Listener {
 
-    private final AnimatedDoorsPlugin plugin;
+    private final DynamicDoorsPlugin plugin;
 
-    public PowerBlockListener(AnimatedDoorsPlugin plugin) {
+    public PowerBlockListener(DynamicDoorsPlugin plugin) {
         this.plugin = plugin;
     }
 
@@ -39,7 +39,7 @@ public class PowerBlockListener implements Listener {
         if (door == null) {
             return;
         }
-        if (event.getPlayer().isSneaking() && event.getPlayer().hasPermission("animateddoors.admin")) {
+        if (event.getPlayer().isSneaking() && event.getPlayer().hasPermission("dynamicdoors.admin")) {
             // Deliberate removal by a builder: let it go, but don't leave a dangling reference.
             door.setPowerBlock(null);
             plugin.saveDoors();

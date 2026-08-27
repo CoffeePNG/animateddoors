@@ -1,9 +1,9 @@
-package com.coffeepng.animateddoors.door;
+package com.coffeepng.dynamicdoors.door;
 
-import com.coffeepng.animateddoors.model.BlockVector3;
-import com.coffeepng.animateddoors.model.Door;
-import com.coffeepng.animateddoors.model.DoorType;
-import com.coffeepng.animateddoors.util.BlockRotation;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.Door;
+import com.coffeepng.dynamicdoors.model.DoorType;
+import com.coffeepng.dynamicdoors.util.BlockRotation;
 
 /**
  * Maps a door's closed-layout block positions to their open-state world positions,

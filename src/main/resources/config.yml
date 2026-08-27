@@ -1,4 +1,4 @@
-# AnimatedDoors configuration
+# DynamicDoors configuration
 
 animation:
   # Total time the door takes to swing open/closed, in server ticks (20 ticks = 1 second).
@@ -8,7 +8,7 @@ animation:
   step-ticks: 2
 
 triggers:
-  # Right-clicking any block that belongs to a door toggles it (requires animateddoors.toggle).
+  # Right-clicking any block that belongs to a door toggles it (requires dynamicdoors.toggle).
   click-door-to-toggle: true
   # Cooldown (in ticks) before the same door can be toggled again. Prevents redstone spam / double-fires.
   cooldown-ticks: 10

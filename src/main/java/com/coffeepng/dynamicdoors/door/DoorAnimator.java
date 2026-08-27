@@ -1,11 +1,11 @@
-package com.coffeepng.animateddoors.door;
+package com.coffeepng.dynamicdoors.door;
 
-import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
-import com.coffeepng.animateddoors.model.BlockVector3;
-import com.coffeepng.animateddoors.model.Door;
-import com.coffeepng.animateddoors.model.DoorType;
-import com.coffeepng.animateddoors.util.BlockRotation;
-import com.coffeepng.animateddoors.util.DoorTransform;
+import com.coffeepng.dynamicdoors.DynamicDoorsPlugin;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.Door;
+import com.coffeepng.dynamicdoors.model.DoorType;
+import com.coffeepng.dynamicdoors.util.BlockRotation;
+import com.coffeepng.dynamicdoors.util.DoorTransform;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -31,9 +31,9 @@ import java.util.List;
  */
 public class DoorAnimator {
 
-    private final AnimatedDoorsPlugin plugin;
+    private final DynamicDoorsPlugin plugin;
 
-    public DoorAnimator(AnimatedDoorsPlugin plugin) {
+    public DoorAnimator(DynamicDoorsPlugin plugin) {
         this.plugin = plugin;
     }
 

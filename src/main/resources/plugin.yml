@@ -1,6 +1,6 @@
-name: AnimatedDoors
+name: DynamicDoors
 version: '${project.version}'
-main: com.coffeepng.animateddoors.AnimatedDoorsPlugin
+main: com.coffeepng.dynamicdoors.DynamicDoorsPlugin
 api-version: '1.21'
 description: Usable animated doors triggered by redstone or floating click-triggers.
 author: coffeepng
@@ -8,17 +8,17 @@ commands:
   door:
     description: Create and control animated doors.
     usage: /door help
-    aliases: [adoor, animateddoor]
-    permission: animateddoors.use
+    aliases: [ddoor, dynamicdoor]
+    permission: dynamicdoors.use
 permissions:
-  animateddoors.use:
-    description: Base permission to use AnimatedDoors commands.
+  dynamicdoors.use:
+    description: Base permission to use DynamicDoors commands.
     default: op
-  animateddoors.admin:
+  dynamicdoors.admin:
     description: Create, edit and remove doors.
     default: op
     children:
-      animateddoors.use: true
-  animateddoors.toggle:
+      dynamicdoors.use: true
+  dynamicdoors.toggle:
     description: Toggle doors via triggers / clicking.
     default: true

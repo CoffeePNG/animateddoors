@@ -1,14 +1,14 @@
-package com.coffeepng.animateddoors.command;
+package com.coffeepng.dynamicdoors.command;
 
-import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
-import com.coffeepng.animateddoors.door.DoorAnimator;
-import com.coffeepng.animateddoors.door.ToggleResult;
-import com.coffeepng.animateddoors.model.BlockVector3;
-import com.coffeepng.animateddoors.model.Door;
-import com.coffeepng.animateddoors.model.DoorType;
-import com.coffeepng.animateddoors.preview.PreviewManager;
-import com.coffeepng.animateddoors.selection.SelectionManager;
-import com.coffeepng.animateddoors.selection.SelectionMode;
+import com.coffeepng.dynamicdoors.DynamicDoorsPlugin;
+import com.coffeepng.dynamicdoors.door.DoorAnimator;
+import com.coffeepng.dynamicdoors.door.ToggleResult;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.Door;
+import com.coffeepng.dynamicdoors.model.DoorType;
+import com.coffeepng.dynamicdoors.preview.PreviewManager;
+import com.coffeepng.dynamicdoors.selection.SelectionManager;
+import com.coffeepng.dynamicdoors.selection.SelectionMode;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -33,9 +33,9 @@ public class DoorCommand implements TabExecutor {
             "preview", "remove", "list", "info", "hinge", "type", "direction", "slide",
             "powerblock", "trigger", "toggle", "reload");
 
-    private final AnimatedDoorsPlugin plugin;
+    private final DynamicDoorsPlugin plugin;
 
-    public DoorCommand(AnimatedDoorsPlugin plugin) {
+    public DoorCommand(DynamicDoorsPlugin plugin) {
         this.plugin = plugin;
     }
 
@@ -75,14 +75,14 @@ public class DoorCommand implements TabExecutor {
     }
 
     private void help(CommandSender sender) {
-        msg(sender, NamedTextColor.GOLD, "AnimatedDoors — selection:");
+        msg(sender, NamedTextColor.GOLD, "DynamicDoors — selection:");
         line(sender, "/door wand", "get the selection wand");
         line(sender, "/door mode <block|region>", "pick blocks one by one, or use two corners");
         line(sender, "/door add", "(block mode) add the wand's corner box to your picks");
         line(sender, "/door sub", "(block mode) subtract the wand's corner box from your picks");
         line(sender, "/door finish", "preview exactly which blocks will move");
         line(sender, "/door clear", "clear your selection");
-        msg(sender, NamedTextColor.GOLD, "AnimatedDoors — doors:");
+        msg(sender, NamedTextColor.GOLD, "DynamicDoors — doors:");
         line(sender, "/door create <name>", "create a door from your selection");
         line(sender, "/door edit <name>", "load a door's blocks back into your selection");
         line(sender, "/door update <name>", "replace a door's blocks with your selection");
@@ -702,7 +702,7 @@ public class DoorCommand implements TabExecutor {
     }
 
     private void toggle(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("animateddoors.toggle")) {
+        if (!sender.hasPermission("dynamicdoors.toggle")) {
             msg(sender, NamedTextColor.RED, "You don't have permission to toggle doors.");
             return;
         }
@@ -740,7 +740,7 @@ public class DoorCommand implements TabExecutor {
     }
 
     private boolean requireAdmin(CommandSender sender) {
-        if (!sender.hasPermission("animateddoors.admin")) {
+        if (!sender.hasPermission("dynamicdoors.admin")) {
             msg(sender, NamedTextColor.RED, "You don't have permission to do that.");
             return false;
         }
@@ -748,7 +748,7 @@ public class DoorCommand implements TabExecutor {
     }
 
     private boolean requireUse(CommandSender sender) {
-        if (!sender.hasPermission("animateddoors.use")) {
+        if (!sender.hasPermission("dynamicdoors.use")) {
             msg(sender, NamedTextColor.RED, "You don't have permission to do that.");
             return false;
         }

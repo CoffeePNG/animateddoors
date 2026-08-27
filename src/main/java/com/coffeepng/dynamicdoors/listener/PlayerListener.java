@@ -1,11 +1,11 @@
-package com.coffeepng.animateddoors.listener;
+package com.coffeepng.dynamicdoors.listener;
 
-import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
-import com.coffeepng.animateddoors.door.ToggleResult;
-import com.coffeepng.animateddoors.model.BlockVector3;
-import com.coffeepng.animateddoors.model.Door;
-import com.coffeepng.animateddoors.selection.SelectionManager;
-import com.coffeepng.animateddoors.selection.SelectionMode;
+import com.coffeepng.dynamicdoors.DynamicDoorsPlugin;
+import com.coffeepng.dynamicdoors.door.ToggleResult;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.Door;
+import com.coffeepng.dynamicdoors.selection.SelectionManager;
+import com.coffeepng.dynamicdoors.selection.SelectionMode;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -29,9 +29,9 @@ import java.util.UUID;
  */
 public class PlayerListener implements Listener {
 
-    private final AnimatedDoorsPlugin plugin;
+    private final DynamicDoorsPlugin plugin;
 
-    public PlayerListener(AnimatedDoorsPlugin plugin) {
+    public PlayerListener(DynamicDoorsPlugin plugin) {
         this.plugin = plugin;
     }
 
@@ -47,7 +47,7 @@ public class PlayerListener implements Listener {
         Player player = event.getPlayer();
 
         // Selection wand takes priority for admins holding it.
-        if (isWand(event.getItem()) && player.hasPermission("animateddoors.admin")) {
+        if (isWand(event.getItem()) && player.hasPermission("dynamicdoors.admin")) {
             handleWand(event, player, block);
             return;
         }
@@ -61,7 +61,7 @@ public class PlayerListener implements Listener {
         // A power block is a doorknob you can also wire up: clicking it toggles its door.
         if (plugin.isClickPowerBlock()) {
             Door powered = plugin.powerBlockOwner(world, pos);
-            if (powered != null && player.hasPermission("animateddoors.toggle")) {
+            if (powered != null && player.hasPermission("dynamicdoors.toggle")) {
                 event.setCancelled(true);
                 toggle(player, powered);
                 return;
@@ -70,7 +70,7 @@ public class PlayerListener implements Listener {
 
         if (plugin.isClickToToggle()) {
             Optional<Door> door = plugin.getDoorManager().doorAt(world, pos);
-            if (door.isPresent() && player.hasPermission("animateddoors.toggle")) {
+            if (door.isPresent() && player.hasPermission("dynamicdoors.toggle")) {
                 event.setCancelled(true);
                 toggle(player, door.get());
             }
@@ -90,7 +90,7 @@ public class PlayerListener implements Listener {
             return;
         }
         Player player = event.getPlayer();
-        if (!player.hasPermission("animateddoors.toggle")) {
+        if (!player.hasPermission("dynamicdoors.toggle")) {
             return;
         }
         for (Door door : plugin.getDoorManager().all()) {

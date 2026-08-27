@@ -1,8 +1,8 @@
-package com.coffeepng.animateddoors.listener;
+package com.coffeepng.dynamicdoors.listener;
 
-import com.coffeepng.animateddoors.AnimatedDoorsPlugin;
-import com.coffeepng.animateddoors.model.BlockVector3;
-import com.coffeepng.animateddoors.model.Door;
+import com.coffeepng.dynamicdoors.DynamicDoorsPlugin;
+import com.coffeepng.dynamicdoors.model.BlockVector3;
+import com.coffeepng.dynamicdoors.model.Door;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.event.EventHandler;
@@ -22,9 +22,9 @@ import org.bukkit.event.block.BlockRedstoneEvent;
  */
 public class RedstoneListener implements Listener {
 
-    private final AnimatedDoorsPlugin plugin;
+    private final DynamicDoorsPlugin plugin;
 
-    public RedstoneListener(AnimatedDoorsPlugin plugin) {
+    public RedstoneListener(DynamicDoorsPlugin plugin) {
         this.plugin = plugin;
     }
 
