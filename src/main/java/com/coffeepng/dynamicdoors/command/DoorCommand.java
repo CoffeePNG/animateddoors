@@ -7,6 +7,7 @@ import com.coffeepng.dynamicdoors.model.BlockVector3;
 import com.coffeepng.dynamicdoors.model.Door;
 import com.coffeepng.dynamicdoors.model.DoorType;
 import com.coffeepng.dynamicdoors.preview.PreviewManager;
+import com.coffeepng.dynamicdoors.selection.AttachmentScanner;
 import com.coffeepng.dynamicdoors.selection.SelectionManager;
 import com.coffeepng.dynamicdoors.selection.SelectionMode;
 import net.kyori.adventure.text.Component;
@@ -21,8 +22,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,7 +33,7 @@ public class DoorCommand implements TabExecutor {
 
     private static final List<String> SUBS = List.of(
             "help", "wand", "mode", "add", "sub", "clear", "finish", "create", "edit", "update",
-            "select", "preview", "remove", "list", "info", "hinge", "type", "direction", "slide",
+            "attach", "select", "preview", "remove", "list", "info", "hinge", "type", "direction", "slide",
             "powerblock", "trigger", "toggle", "reload");
 
     /** How far away a builder can point at a hinge block. */
@@ -56,6 +59,7 @@ public class DoorCommand implements TabExecutor {
             case "add" -> regionInto(sender, true);
             case "sub", "subtract" -> regionInto(sender, false);
             case "clear" -> clear(sender);
+            case "attach" -> attach(sender);
             case "finish", "done" -> finish(sender);
             case "select", "use" -> select(sender, args);
             case "create" -> create(sender, args);
@@ -84,6 +88,7 @@ public class DoorCommand implements TabExecutor {
         line(sender, "/door mode <block|region>", "pick blocks one by one, or use two corners");
         line(sender, "/door add", "(block mode) add the wand's corner box to your picks");
         line(sender, "/door sub", "(block mode) subtract the wand's corner box from your picks");
+        line(sender, "/door attach", "pull in torches, buttons, signs … stuck to your selection");
         line(sender, "/door finish", "preview exactly which blocks will move");
         line(sender, "/door clear", "clear your selection");
         msg(sender, NamedTextColor.GOLD, "DynamicDoors — doors:");
@@ -193,6 +198,56 @@ public class DoorCommand implements TabExecutor {
         msg(sender, NamedTextColor.GREEN, "Selection cleared.");
     }
 
+    /** Pull the bits stuck to the selection — torches, buttons, signs, ladders — into it. */
+    private void attach(CommandSender sender) {
+        if (!requireAdmin(sender) || !(sender instanceof Player player)) {
+            return;
+        }
+        SelectionManager.Selection sel = plugin.getSelectionManager().get(player.getUniqueId());
+        List<BlockVector3> cells = resolveSelection(player, sel);
+        if (cells == null) {
+            return;
+        }
+        World world = player.getWorld();
+        List<BlockVector3> found = AttachmentScanner.find(world, cells, plugin.getAttachLimit());
+        if (found.isEmpty()) {
+            msg(sender, NamedTextColor.GRAY, "Nothing else looks attached to your selection.");
+            return;
+        }
+        if (sel.mode() == SelectionMode.REGION) {
+            // Attached blocks sit outside the box by definition, so the box can't describe the result.
+            sel.setMode(SelectionMode.BLOCK);
+            sel.addAll(cells);
+            msg(sender, NamedTextColor.GRAY, "Switched you to block mode — the attached blocks sit outside your box.");
+        }
+        sel.addAll(found);
+        List<BlockVector3> all = sel.blocks();
+        plugin.getPreviewManager().showSelection(player, world, all,
+                PreviewManager.SELECTION_COLOR, plugin.getPreviewTicks());
+        msg(sender, NamedTextColor.GREEN, "Added " + found.size() + " attached block(s): "
+                + summarise(world, found) + ". " + all.size() + " block(s) selected.");
+        msg(sender, NamedTextColor.GRAY, "Anything it grabbed that isn't part of the door? Left-click it to drop it.");
+    }
+
+    /** "2 torches, 1 lever" — a short readable tally of what a scan turned up. */
+    private String summarise(World world, List<BlockVector3> cells) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (BlockVector3 cell : cells) {
+            String name = world.getBlockAt(cell.x(), cell.y(), cell.z())
+                    .getType().name().toLowerCase(Locale.ROOT).replace('_', ' ');
+            counts.merge(name, 1, Integer::sum);
+        }
+        List<String> parts = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+            if (parts.size() == 5) {
+                parts.add("and " + (counts.size() - 5) + " more kind(s)");
+                break;
+            }
+            parts.add(entry.getValue() + "x " + entry.getKey());
+        }
+        return String.join(", ", parts);
+    }
+
     /** Show exactly which blocks the door would take — the "hit finished" preview. */
     private void finish(CommandSender sender) {
         if (!requireAdmin(sender) || !(sender instanceof Player player)) {
@@ -209,6 +264,11 @@ public class DoorCommand implements TabExecutor {
         msg(sender, NamedTextColor.GOLD, "Preview: " + shown + " block(s) glowing — that is exactly what will move.");
         msg(sender, NamedTextColor.GRAY, "Wrong blocks in there? Left-click them with the wand to drop them, "
                 + "then /door finish again. Happy? /door create <name>.");
+        List<BlockVector3> attached = AttachmentScanner.find(world, cells, plugin.getAttachLimit());
+        if (!attached.isEmpty()) {
+            msg(sender, NamedTextColor.GOLD, attached.size() + " block(s) look attached to this door but aren't "
+                    + "in it (" + summarise(world, attached) + ") — /door attach pulls them in.");
+        }
         warnContainers(sender, world, cells);
     }
 

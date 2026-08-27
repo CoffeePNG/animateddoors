@@ -53,6 +53,7 @@ public class DynamicDoorsPlugin extends JavaPlugin {
     private boolean suppressBlockUpdates;
     private int updateGuardGraceTicks;
     private String wandMaterial;
+    private int attachLimit;
     private Material powerBlockMaterial;
     private boolean requirePowerBlockMaterial;
     private boolean protectPowerBlocks;
@@ -132,6 +133,7 @@ public class DynamicDoorsPlugin extends JavaPlugin {
         this.clickPowerBlock = getConfig().getBoolean("power-block.click-to-toggle", true);
         this.givePowerBlockWithWand = getConfig().getBoolean("power-block.give-with-wand", true);
         this.wandMaterial = getConfig().getString("selection.wand-material", "BLAZE_ROD");
+        this.attachLimit = getConfig().getInt("selection.attach-limit", 256);
         this.previewEnabled = getConfig().getBoolean("preview.enabled", true);
         this.previewTicks = getConfig().getInt("preview.duration-ticks", 200);
         this.previewLiveTicks = getConfig().getInt("preview.live-duration-ticks", 100);
@@ -509,5 +511,10 @@ public class DynamicDoorsPlugin extends JavaPlugin {
 
     public String getWandMaterial() {
         return wandMaterial;
+    }
+
+    /** Most blocks a single /door attach scan will pull in. */
+    public int getAttachLimit() {
+        return attachLimit;
     }
 }

@@ -45,9 +45,10 @@ folder and restart.
      the whole box at once (air is skipped), and left-click the few blocks that don't belong.
    - `/door sub` subtracts a corner box; `/door clear` starts over.
    - Prefer the old behaviour? `/door mode region` gives you the plain two-corner box.
-3. `/door finish` — **preview**: the exact blocks that will move light up. Wrong ones in there? Left-click
+3. `/door attach` — optional: pulls in the small stuff stuck to the door (see below).
+4. `/door finish` — **preview**: the exact blocks that will move light up. Wrong ones in there? Left-click
    them and run it again.
-4. `/door create mygate` — create the door from the previewed selection (warns if it holds filled containers).
+5. `/door create mygate` — create the door from the previewed selection (warns if it holds filled containers).
 
 **For a swing door (default):**
 
@@ -65,6 +66,27 @@ folder and restart.
 6. `/door slide mygate 5` — optional: set the distance (`+` up, `−` down). Setting a slide also makes it a portcullis.
 7. `/door preview mygate` — ghost-run the slide first.
 8. `/door toggle mygate` — do it for real.
+
+### Attached blocks
+
+A torch, button, lever, sign or ladder stuck to the door only moves if it is *in the selection* — the
+plugin has no idea it "belongs" to the gate otherwise. Clicking each one gets tedious, so **`/door attach`**
+finds them for you: it works out what each neighbouring block is held up by, and pulls in the ones resting
+on — or stuck to — blocks you already picked. It runs a few passes, so a lantern hanging off a sign hanging
+off the door comes along too, and stops at `selection.attach-limit` blocks.
+
+It handles buttons and levers (floor, wall or ceiling), wall and standing torches, signs and hanging signs,
+banners, heads, ladders, lanterns, vines and glow lichen, carpets, pressure plates, rails, redstone dust,
+repeaters and comparators, flowers and candles, and both halves of two-block things like doors and beds.
+`/door finish` also *tells* you when it spots attached blocks you haven't included, so you find out before
+the first swing rather than after.
+
+It's a best-effort guess, and everything it adds is previewed — anything it grabbed that isn't part of the
+door, left-click to drop. To fix a door that's already built: `/door edit mygate`, `/door attach`,
+`/door update mygate`.
+
+Item frames, paintings and armour stands are entities rather than blocks, so they never move with a door
+no matter what is selected.
 
 ### Previews
 
@@ -123,6 +145,7 @@ back to the door. Both require the door to be closed.
 | `/door mode <block\|region>` | Pick blocks one by one, or use a two-corner box |
 | `/door add` | Add the wand's corner box to your picks (skips air) |
 | `/door sub` | Subtract the wand's corner box from your picks |
+| `/door attach` | Pull in torches, buttons, signs … stuck to your selection |
 | `/door finish` | Preview exactly which blocks will move |
 | `/door clear` | Clear your selection |
 | `/door create <name>` | Create a door from your selection |
@@ -194,6 +217,7 @@ restrictions:
 selection:
   wand-material: BLAZE_ROD
   default-mode: block  # block = pick blocks individually, region = two-corner box
+  attach-limit: 256    # cap on what one /door attach scan pulls in
 preview:
   enabled: true
   duration-ticks: 200        # how long /door finish stays up

@@ -63,6 +63,8 @@ selection:
   #            corners for /door add and /door sub). Only the blocks you pick belong to the door.
   #   region - classic two-corner box; everything solid inside it becomes part of the door.
   default-mode: block
+  # Most blocks a single /door attach scan will pull in, so a scan can't run away across a build.
+  attach-limit: 256
 
 preview:
   # Master switch for the glowing selection outlines and ghost motion previews.
