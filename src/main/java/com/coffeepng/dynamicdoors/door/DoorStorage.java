@@ -3,6 +3,7 @@ package com.coffeepng.dynamicdoors.door;
 import com.coffeepng.dynamicdoors.model.BlockVector3;
 import com.coffeepng.dynamicdoors.model.Door;
 import com.coffeepng.dynamicdoors.model.DoorType;
+import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -10,6 +11,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -78,6 +80,16 @@ public class DoorStorage {
         door.setType(type == null ? DoorType.SWING : type);
         door.setQuarterTurns(sec.getInt("quarterTurns", 1));
         door.setSlide(sec.getInt("slide", 0));
+        door.setSlideDistance(sec.getInt("slideDistance", 0));
+        String face = sec.getString("slideFace");
+        if (face != null) {
+            try {
+                door.setSlideFace(BlockFace.valueOf(face.toUpperCase(Locale.ROOT)));
+            } catch (IllegalArgumentException ex) {
+                logger.warning("Door '" + name + "' has an invalid slide direction '" + face
+                        + "'; falling back to " + door.getSlideFace().name().toLowerCase(Locale.ROOT) + ".");
+            }
+        }
         door.setOpen(sec.getBoolean("open", false));
         if (sec.isList("power")) {
             door.setPowerBlock(readVec(sec.getIntegerList("power")));
@@ -148,9 +160,11 @@ public class DoorStorage {
         yaml.set(base + ".min", vecList(door.getMin()));
         yaml.set(base + ".max", vecList(door.getMax()));
         yaml.set(base + ".hinge", List.of(door.getHingeX(), door.getHingeZ()));
-        yaml.set(base + ".type", door.getType().name().toLowerCase());
+        yaml.set(base + ".type", door.getType().name().toLowerCase(Locale.ROOT));
         yaml.set(base + ".quarterTurns", door.getQuarterTurns());
         yaml.set(base + ".slide", door.getSlide());
+        yaml.set(base + ".slideDistance", door.getSlideDistance());
+        yaml.set(base + ".slideFace", door.getSlideFace().name().toLowerCase(Locale.ROOT));
         yaml.set(base + ".open", door.isOpen());
         yaml.set(base + ".power", door.getPowerBlock() == null ? null : vecList(door.getPowerBlock()));
         yaml.set(base + ".redstone", door.getRedstoneTrigger() == null ? null : vecList(door.getRedstoneTrigger()));

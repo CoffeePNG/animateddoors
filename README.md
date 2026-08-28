@@ -1,8 +1,8 @@
 # DynamicDoors
 
-Usable animated doors for **Paper / Purpur 1.21.11** (Java 21). Doors either **swing** open around a
-vertical hinge or slide up/down as a **portcullis**, animated smoothly with `BlockDisplay`, and can be
-triggered by **redstone** or by **floating click-triggers**.
+Usable animated doors for **Paper / Purpur 1.21.11** (Java 21). Doors **swing** open around a vertical
+hinge, slide up/down as a **portcullis**, or slide sideways as a **sliding** door, animated smoothly with
+`BlockDisplay`, and can be triggered by **redstone** or by **floating click-triggers**.
 
 This is a focused, from-scratch alternative to the "doors" slice of
 [AnimatedArchitecture](https://modrinth.com/plugin/animatedarchitecture) — not a fork and shares no
@@ -26,19 +26,24 @@ folder and restart.
 
 - A door is an explicit **set of blocks** you pick — not a box. Only the blocks you selected move, so a
   wall, floor or roof that happens to share the door's bounding box is never dragged along. Each door
-  has a **type**: `swing` or `portcullis`.
+  has a **type**: `swing`, `portcullis` or `sliding`.
   - **Swing** doors rotate 90° around a **hinge** — the vertical column at one (x, z), since the turn is
     around the Y axis, so any block of that column names the same hinge. It is usually a block of the door
     itself, but it doesn't have to be: a hinge outside the door just sweeps a wider arc. The client
     interpolates a true arc, and block facing (stairs, logs, fences, signs, …) is rotated to match,
     best-effort.
   - **Portcullis** doors slide straight up or down by a set number of blocks.
+  - **Sliding** doors slide sideways along a compass direction by a set number of blocks — a pocket door
+    that retracts into the wall beside it, or a blast door that slides aside. Block facing is left alone,
+    since nothing rotates.
 - During a move the real blocks are removed and rendered by per-block `BlockDisplay` entities; the real
   blocks are placed at their destinations when the animation finishes.
 
 ## Quick start
 
-1. `/door wand` — grab the selection wand (a blaze rod by default). It starts in **block mode**.
+1. `/door wand` — grab the selection wand (a blaze rod named *Door Wand* by default; both the material
+   and the name are configurable). Only wands handed out by this command select blocks, so an ordinary
+   blaze rod stays an ordinary blaze rod. The wand starts in **block mode**.
 2. **Right-click** each block that belongs to the door; **left-click** a block to drop it again. Every
    pick refreshes a glowing outline so you can see the door taking shape.
    - Big flat gate? **Shift-left-click** and **shift-right-click** two corners, then `/door add` to take
@@ -66,6 +71,16 @@ folder and restart.
 6. `/door slide mygate 5` — optional: set the distance (`+` up, `−` down). Setting a slide also makes it a portcullis.
 7. `/door preview mygate` — ghost-run the slide first.
 8. `/door toggle mygate` — do it for real.
+
+**For a sliding door:**
+
+5. `/door type mygate sliding` — switch it to horizontal-slide motion. It defaults to retracting along its
+   own longest horizontal axis by its width on that axis, so a wall-shaped door disappears into the wall
+   beside it.
+6. `/door direction mygate west` — optional: pick which way it retracts (`north`, `south`, `east`, `west`).
+7. `/door slide mygate 4` — optional: set the distance.
+8. `/door preview mygate` — ghost-run the slide first.
+9. `/door toggle mygate` — do it for real.
 
 ### Attached blocks
 
@@ -155,10 +170,12 @@ back to the door. Both require the door to be closed.
 | `/door edit <name>` | Load a door's blocks back into your selection |
 | `/door update <name>` | Replace a door's blocks with your selection |
 | `/door preview <name> [open\|close]` | Ghost-run the move without touching blocks |
-| `/door type <name> <swing\|portcullis>` | Choose swing or vertical-slide motion |
+| `/door type <name> <swing\|portcullis\|sliding>` | Choose the door's motion |
 | `/door hinge <name> [here\|show\|<x> <z>]` | (swing) Set or show the column the door pivots around |
 | `/door direction <name> <cw\|ccw>` | (swing) Set the opening direction |
-| `/door slide <name> <blocks>` | (portcullis) Set vertical distance (+up / −down) |
+| `/door direction <name> <up\|down>` | (portcullis) Set which way it retracts |
+| `/door direction <name> <north\|south\|east\|west>` | (sliding) Set which way it retracts |
+| `/door slide <name> <blocks>` | Set the travel distance (portcullis: +up / −down) |
 | `/door powerblock <name> [wand\|clear\|show]` | Bind (by look or wand), unbind, or locate the power block |
 | `/door trigger <name> <redstone\|float\|clear>` | Manage triggers |
 | `/door toggle <name>` | Open/close a door |
@@ -219,6 +236,11 @@ restrictions:
   update-guard-grace-ticks: 2
 selection:
   wand-material: BLAZE_ROD
+  wand-name: "<gold>Door Wand"   # MiniMessage formatting
+  wand-lore:
+    - "<gray>Select the blocks your door is made of"
+    - "<gray>Then /door finish to preview them"
+  strict-wand: true    # false = any item of wand-material selects blocks
   default-mode: block  # block = pick blocks individually, region = two-corner box
   attach-limit: 256    # cap on what one /door attach scan pulls in
 preview:
@@ -228,6 +250,13 @@ preview:
   hold-ticks: 40             # how long a ghost lingers at its destination
   max-blocks: 2000           # selections bigger than this aren't previewed
 ```
+
+The wand's name and lore accept [MiniMessage](https://docs.advntr.dev/minimessage/format.html) tags, so
+`"<gradient:#ffcc00:#ff6600><bold>Door Wand"` works as well as a plain string. Wands are stamped with a
+hidden tag when `/door wand` hands them out; with `strict-wand: true` (the default) that tag is what makes
+an item a wand, so renaming, stacking or storing it is safe and a look-alike item does nothing. Set
+`strict-wand: false` to also accept any item of `wand-material`, which is how wands behaved before they
+were named.
 
 ### Block updates
 
@@ -249,8 +278,8 @@ behave normally around the door.
 
 ## Known limitations (tier-two scope)
 
-- Two motion types are supported: swing (90° around a vertical hinge) and portcullis (vertical slide).
-  Drawbridges, revolving doors, and other structure types are out of scope here.
+- Three motion types are supported: swing (90° around a vertical hinge), portcullis (vertical slide) and
+  sliding (horizontal slide). Drawbridges, revolving doors, and other structure types are out of scope here.
 - Tile-entity **contents** are not preserved by a move. To protect them, a door refuses to move while
   any container inside it (chest, barrel, furnace, hopper, shulker box, …) still holds items — empty it
   first, or disable the guard with `restrictions.block-filled-containers: false`. Empty containers move
@@ -266,3 +295,4 @@ behave normally around the door.
 - Doors created before per-block selection were stored as a box; they load as every block in that box and
   are rewritten in the new per-block format on the next save. Run `/door edit`/`/door update` on them to
   trim anything that was never part of the door.
+

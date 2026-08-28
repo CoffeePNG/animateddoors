@@ -141,7 +141,13 @@ public class PreviewManager {
         int openQuarters = DoorGeometry.openingQuarterTurns(door);
         int finalQuarters = opening ? openQuarters : -openQuarters;
         double targetAngle = Math.toRadians(90.0 * finalQuarters);
-        float slideTotal = opening ? door.getSlide() : -door.getSlide();
+        // Straight-line displacement for the translating types (portcullis / sliding).
+        BlockVector3 shift = DoorGeometry.openShift(door);
+        int shiftSign = opening ? 1 : -1;
+        Vector3f translation = new Vector3f(
+                (float) shift.x() * shiftSign,
+                (float) shift.y() * shiftSign,
+                (float) shift.z() * shiftSign);
 
         List<Vector3f> hingeRel = new ArrayList<>();
         for (BlockVector3 closed : door.closedPositions()) {
@@ -171,13 +177,14 @@ public class PreviewManager {
                 step++;
                 double eased = DoorTransform.easeInOut(Math.min(1.0, (double) step / steps));
                 float angle = (float) (eased * targetAngle);
-                float dy = (float) (eased * slideTotal);
+                float progress = (float) eased;
                 for (int i = 0; i < session.displays.size(); i++) {
                     BlockDisplay display = session.displays.get(i);
                     if (!display.isValid()) {
                         continue;
                     }
-                    Matrix4f m = DoorTransform.keyframe(swing, hingeRel.get(i), angle, dy);
+                    Matrix4f m = DoorTransform.keyframe(swing, hingeRel.get(i), angle,
+                            new Vector3f(translation).mul(progress));
                     display.setInterpolationDelay(0);
                     display.setInterpolationDuration(stepTicks);
                     display.setTransformationMatrix(m);

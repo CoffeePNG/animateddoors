@@ -22,14 +22,14 @@ public final class DoorTransform {
     /**
      * Transform for one keyframe.
      *
-     * @param swing    true for a swing door (rotate about the hinge), false to translate vertically
+     * @param swing    true for a swing door (rotate about the hinge), false to translate in a straight line
      * @param hingeRel hinge offset from {@link #hingeOffset}
      * @param angle    current swing angle in radians
-     * @param dy       current vertical offset in blocks
+     * @param offset   current displacement in blocks, for the translating types (portcullis / sliding)
      */
-    public static Matrix4f keyframe(boolean swing, Vector3f hingeRel, float angle, float dy) {
+    public static Matrix4f keyframe(boolean swing, Vector3f hingeRel, float angle, Vector3f offset) {
         if (!swing) {
-            return new Matrix4f().translate(0f, dy, 0f);
+            return new Matrix4f().translate(offset.x, offset.y, offset.z);
         }
         // JOML rotateY(-angle) matches the clockwise (x,z)->(-z,x) convention used everywhere.
         return new Matrix4f()

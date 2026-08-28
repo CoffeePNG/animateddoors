@@ -3,6 +3,7 @@ package com.coffeepng.dynamicdoors.door;
 import com.coffeepng.dynamicdoors.model.BlockVector3;
 import com.coffeepng.dynamicdoors.model.Door;
 import com.coffeepng.dynamicdoors.model.DoorType;
+import org.bukkit.block.BlockFace;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -31,7 +32,10 @@ import java.util.zip.GZIPOutputStream;
 public final class DoorCodec {
 
     /** Format marker, bumped whenever the binary layout changes. */
-    private static final byte VERSION = 1;
+    private static final byte VERSION = 2;
+
+    /** Oldest layout still readable. v1 predates the sliding type and simply has no slide face. */
+    private static final byte MIN_VERSION = 1;
 
     /** Bounding boxes bigger than this fall back to an explicit coordinate list. */
     private static final int MAX_BITMASK_CELLS = 1 << 16;
@@ -54,6 +58,9 @@ public final class DoorCodec {
             out.writeByte(door.getType().ordinal());
             out.writeInt(door.getQuarterTurns());
             out.writeInt(door.getSlide());
+            out.writeInt(door.getSlideDistance());
+            // By name, not ordinal: BlockFace's ordering is not ours to depend on.
+            out.writeUTF(door.getSlideFace().name());
             out.writeBoolean(door.isOpen());
             writeOptionalVec(out, door.getPowerBlock());
             writeOptionalVec(out, door.getRedstoneTrigger());
@@ -69,7 +76,7 @@ public final class DoorCodec {
         byte[] raw = Base64.getDecoder().decode(encoded);
         try (DataInputStream in = new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(raw)))) {
             byte version = in.readByte();
-            if (version != VERSION) {
+            if (version < MIN_VERSION || version > VERSION) {
                 throw new IllegalArgumentException("unsupported door format version " + version);
             }
             String name = in.readUTF();
@@ -81,6 +88,15 @@ public final class DoorCodec {
             door.setType(typeOrdinal >= 0 && typeOrdinal < types.length ? types[typeOrdinal] : DoorType.SWING);
             door.setQuarterTurns(in.readInt());
             door.setSlide(in.readInt());
+            if (version >= 2) {
+                door.setSlideDistance(in.readInt());
+                String face = in.readUTF();
+                try {
+                    door.setSlideFace(BlockFace.valueOf(face));
+                } catch (IllegalArgumentException ex) {
+                    throw new IllegalArgumentException("invalid slide direction '" + face + "'", ex);
+                }
+            }
             door.setOpen(in.readBoolean());
             door.setPowerBlock(readOptionalVec(in));
             door.setRedstoneTrigger(readOptionalVec(in));
