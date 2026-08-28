@@ -10,14 +10,23 @@ import com.coffeepng.animateddoors.listener.PlayerListener;
 import com.coffeepng.animateddoors.model.BlockVector3;
 import com.coffeepng.animateddoors.model.Door;
 import com.coffeepng.animateddoors.selection.SelectionManager;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Interaction;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 public class AnimatedDoorsPlugin extends JavaPlugin {
@@ -28,6 +37,7 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
     private SelectionManager selectionManager;
 
     private NamespacedKey doorKey;
+    private NamespacedKey wandKey;
 
     private int durationTicks;
     private int stepTicks;
@@ -35,6 +45,9 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
     private boolean clickToToggle;
     private boolean blockFilledContainers;
     private String wandMaterial;
+    private String wandName;
+    private List<String> wandLore;
+    private boolean strictWand;
 
     @Override
     public void onEnable() {
@@ -42,6 +55,7 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
         readConfigValues();
 
         this.doorKey = new NamespacedKey(this, "door");
+        this.wandKey = new NamespacedKey(this, "wand");
         this.doorManager = new DoorManager();
         this.doorStorage = new DoorStorage(getDataFolder(), getLogger());
         this.doorAnimator = new DoorAnimator(this);
@@ -84,6 +98,62 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
         this.clickToToggle = getConfig().getBoolean("triggers.click-door-to-toggle", true);
         this.blockFilledContainers = getConfig().getBoolean("restrictions.block-filled-containers", true);
         this.wandMaterial = getConfig().getString("selection.wand-material", "BLAZE_ROD");
+        this.wandName = getConfig().getString("selection.wand-name", "<gold>Door Wand");
+        this.wandLore = getConfig().getStringList("selection.wand-lore");
+        this.strictWand = getConfig().getBoolean("selection.strict-wand", true);
+    }
+
+    // ---- Selection wand ----------------------------------------------------
+
+    /** The wand material from the config, falling back to a blaze rod if it isn't a real material. */
+    public Material wandMaterial() {
+        Material material = Material.matchMaterial(wandMaterial);
+        return material == null ? Material.BLAZE_ROD : material;
+    }
+
+    /** Build a fresh selection wand: the configured material, custom name and lore, tagged as ours. */
+    public ItemStack createWand() {
+        ItemStack item = new ItemStack(wandMaterial());
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(deserialize(wandName));
+        if (!wandLore.isEmpty()) {
+            List<Component> lore = new ArrayList<>(wandLore.size());
+            for (String line : wandLore) {
+                lore.add(deserialize(line));
+            }
+            meta.lore(lore);
+        }
+        meta.getPersistentDataContainer().set(wandKey, PersistentDataType.BYTE, (byte) 1);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    /**
+     * True if {@code item} is a selection wand.
+     *
+     * <p>Wands are identified by the persistent tag {@code createWand()} stamps on them, so an ordinary
+     * item of the same material is never mistaken for one. With {@code selection.strict-wand: false}
+     * any item of the wand material also counts, which keeps wands handed out by older versions
+     * (and ones players give themselves) working.</p>
+     */
+    public boolean isWand(ItemStack item) {
+        if (item == null || item.getType().isAir()) {
+            return false;
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            PersistentDataContainer pdc = meta.getPersistentDataContainer();
+            Byte tag = pdc.get(wandKey, PersistentDataType.BYTE);
+            if (tag != null && tag != 0) {
+                return true;
+            }
+        }
+        return !strictWand && item.getType() == wandMaterial();
+    }
+
+    /** Parse a configured MiniMessage string, without the default italic styling item text picks up. */
+    private static Component deserialize(String raw) {
+        return MiniMessage.miniMessage().deserialize(raw).decoration(TextDecoration.ITALIC, false);
     }
 
     public void reload() {
@@ -221,5 +291,9 @@ public class AnimatedDoorsPlugin extends JavaPlugin {
 
     public String getWandMaterial() {
         return wandMaterial;
+    }
+
+    public NamespacedKey getWandKey() {
+        return wandKey;
     }
 }

@@ -24,8 +24,9 @@ import java.util.List;
  * Animates a door using {@link BlockDisplay} entities.
  *
  * <p>Real blocks are removed for the duration of the move and re-placed at their destinations when the
- * animation finishes. Swing doors rotate their displays around the hinge (a true arc); portcullis doors
- * translate their displays vertically. Either way the client interpolates smoothly between keyframes.</p>
+ * animation finishes. Swing doors rotate their displays around the hinge (a true arc); portcullis and
+ * sliding doors translate their displays along a straight line (vertically and horizontally
+ * respectively). Either way the client interpolates smoothly between keyframes.</p>
  */
 public class DoorAnimator {
 
@@ -110,8 +111,14 @@ public class DoorAnimator {
         int stepTicks = Math.max(1, plugin.getStepTicks());
         int duration = Math.max(stepTicks, plugin.getDurationTicks());
         int steps = Math.max(1, duration / stepTicks);
-        double targetAngle = Math.toRadians(90.0 * finalQuarters);        // swing
-        float slideTotal = opening ? door.getSlide() : -door.getSlide();  // portcullis
+        double targetAngle = Math.toRadians(90.0 * finalQuarters);  // swing
+        // Straight-line displacement for the translating types (portcullis / sliding).
+        BlockVector3 shift = DoorGeometry.openShift(door);
+        int shiftSign = opening ? 1 : -1;
+        Vector3f translation = new Vector3f(
+                (float) shift.x() * shiftSign,
+                (float) shift.y() * shiftSign,
+                (float) shift.z() * shiftSign);
 
         new BukkitRunnable() {
             int step = 0;
@@ -122,7 +129,7 @@ public class DoorAnimator {
                 double t = (double) step / steps;
                 double eased = easeInOut(Math.min(1.0, t));
                 float angle = (float) (eased * targetAngle);
-                float dy = (float) (eased * slideTotal);
+                float progress = (float) eased;
                 for (int i = 0; i < displays.size(); i++) {
                     BlockDisplay display = displays.get(i);
                     if (!display.isValid()) {
@@ -138,7 +145,10 @@ public class DoorAnimator {
                                 .rotateY(-angle)
                                 .translate(-h.x, -h.y, -h.z);
                     } else {
-                        m = new Matrix4f().translate(0f, dy, 0f);
+                        m = new Matrix4f().translate(
+                                translation.x * progress,
+                                translation.y * progress,
+                                translation.z * progress);
                     }
                     display.setInterpolationDelay(0);
                     display.setInterpolationDuration(stepTicks);

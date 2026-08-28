@@ -1,8 +1,8 @@
 # AnimatedDoors
 
-Usable animated doors for **Paper / Purpur 1.21.11** (Java 21). Doors either **swing** open around a
-vertical hinge or slide up/down as a **portcullis**, animated smoothly with `BlockDisplay`, and can be
-triggered by **redstone** or by **floating click-triggers**.
+Usable animated doors for **Paper / Purpur 1.21.11** (Java 21). Doors **swing** open around a vertical
+hinge, slide up/down as a **portcullis**, or slide sideways as a **sliding** door, animated smoothly with
+`BlockDisplay`, and can be triggered by **redstone** or by **floating click-triggers**.
 
 This is a focused, from-scratch alternative to the "doors" slice of
 [AnimatedArchitecture](https://modrinth.com/plugin/animatedarchitecture) — not a fork and shares no
@@ -24,17 +24,22 @@ folder and restart.
 
 ## How it works
 
-- A door is a box selection of blocks with a **type**: `swing` or `portcullis`.
+- A door is a box selection of blocks with a **type**: `swing`, `portcullis` or `sliding`.
   - **Swing** doors rotate 90° around a **hinge** (a vertical column) in a chosen direction. The client
     interpolates a true arc, and block facing (stairs, logs, fences, signs, …) is rotated to match,
     best-effort.
   - **Portcullis** doors slide straight up or down by a set number of blocks.
+  - **Sliding** doors slide sideways along a compass direction by a set number of blocks — a pocket door
+    that retracts into the wall beside it, or a blast door that slides aside. Block facing is left alone,
+    since nothing rotates.
 - During a move the real blocks are removed and rendered by per-block `BlockDisplay` entities; the real
   blocks are placed at their destinations when the animation finishes.
 
 ## Quick start
 
-1. `/door wand` — grab the selection wand (a blaze rod by default).
+1. `/door wand` — grab the selection wand (a blaze rod named *Door Wand* by default; both the material
+   and the name are configurable). Only wands handed out by this command select corners, so an ordinary
+   blaze rod stays an ordinary blaze rod.
 2. **Left-click** one corner of the door, **right-click** the opposite corner.
 3. `/door create mygate` — create the door from the selection (warns if the selection holds filled containers).
 
@@ -47,8 +52,18 @@ folder and restart.
 **For a portcullis:**
 
 4. `/door type mygate portcullis` — switch it to vertical-slide motion (defaults to sliding up by its own height).
-5. `/door slide mygate 5` — optional: set the distance (`+` up, `−` down). Setting a slide also makes it a portcullis.
+5. `/door slide mygate 5` — optional: set the distance (`+` up, `−` down). Setting a slide on a swing door
+   also makes it a portcullis.
 6. `/door toggle mygate` — test the slide.
+
+**For a sliding door:**
+
+4. `/door type mygate sliding` — switch it to horizontal-slide motion. It defaults to retracting along its
+   own longest horizontal axis by its width on that axis, so a wall-shaped door disappears into the wall
+   beside it.
+5. `/door direction mygate west` — optional: pick which way it retracts (`north`, `south`, `east`, `west`).
+6. `/door slide mygate 4` — optional: set the distance.
+7. `/door toggle mygate` — test the slide.
 
 ### Triggers
 
@@ -67,10 +82,12 @@ folder and restart.
 | --- | --- |
 | `/door wand` | Get the selection wand |
 | `/door create <name>` | Create a door from your selection |
-| `/door type <name> <swing\|portcullis>` | Choose swing or vertical-slide motion |
+| `/door type <name> <swing\|portcullis\|sliding>` | Choose the door's motion |
 | `/door hinge <name>` | (swing) Set the hinge to the block you're looking at |
 | `/door direction <name> <cw\|ccw>` | (swing) Set the opening direction |
-| `/door slide <name> <blocks>` | (portcullis) Set vertical distance (+up / −down) |
+| `/door direction <name> <up\|down>` | (portcullis) Set which way it retracts |
+| `/door direction <name> <north\|south\|east\|west>` | (sliding) Set which way it retracts |
+| `/door slide <name> <blocks>` | Set the travel distance (portcullis: +up / −down) |
 | `/door trigger <name> <redstone\|float\|clear>` | Manage triggers |
 | `/door toggle <name>` | Open/close a door |
 | `/door info <name>` | Show a door's details |
@@ -99,15 +116,27 @@ triggers:
   cooldown-ticks: 10   # min ticks between toggles of the same door
 selection:
   wand-material: BLAZE_ROD
+  wand-name: "<gold>Door Wand"   # MiniMessage formatting
+  wand-lore:
+    - "<gray>Left-click: corner 1"
+    - "<gray>Right-click: corner 2"
+  strict-wand: true    # false = any item of wand-material selects corners
 ```
+
+The wand's name and lore accept [MiniMessage](https://docs.advntr.dev/minimessage/format.html) tags, so
+`"<gradient:#ffcc00:#ff6600><bold>Door Wand"` works as well as a plain string. Wands are stamped with a
+hidden tag when `/door wand` hands them out; with `strict-wand: true` (the default) that tag is what makes
+an item a wand, so renaming, stacking or storing it is safe and a look-alike item does nothing. Set
+`strict-wand: false` to also accept any item of `wand-material`, which is how wands behaved before they
+were named.
 
 ## Known limitations (tier-two scope)
 
-- Two motion types are supported: swing (90° around a vertical hinge) and portcullis (vertical slide).
-  Drawbridges, revolving doors, and other structure types are out of scope here.
+- Three motion types are supported: swing (90° around a vertical hinge), portcullis (vertical slide) and
+  sliding (horizontal slide). Drawbridges, revolving doors, and other structure types are out of scope here.
 - Tile-entity **contents** are not preserved by a move. To protect them, a door refuses to move while
   any container inside it (chest, barrel, furnace, hopper, shulker box, …) still holds items — empty it
   first, or disable the guard with `restrictions.block-filled-containers: false`. Empty containers move
   freely. Sign text is still not preserved.
-- A move overwrites whatever occupies the destination cells, so leave the door's path (swing arc or slide
-  column) clear.
+- A move overwrites whatever occupies the destination cells, so leave the door's path (swing arc, slide
+  column, or the blocks a sliding door retracts into) clear.

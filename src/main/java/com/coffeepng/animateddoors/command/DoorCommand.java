@@ -8,8 +8,8 @@ import com.coffeepng.animateddoors.model.DoorType;
 import com.coffeepng.animateddoors.selection.SelectionManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -64,10 +64,11 @@ public class DoorCommand implements TabExecutor {
         msg(sender, NamedTextColor.GOLD, "AnimatedDoors commands:");
         line(sender, "/door wand", "get the selection wand");
         line(sender, "/door create <name>", "create a door from your selection");
-        line(sender, "/door type <name> <swing|portcullis>", "choose swing or vertical-slide motion");
+        line(sender, "/door type <name> <swing|portcullis|sliding>", "choose the door's motion");
         line(sender, "/door hinge <name>", "(swing) set the hinge to the block you're looking at");
         line(sender, "/door direction <name> <cw|ccw>", "(swing) set the opening direction");
-        line(sender, "/door slide <name> <blocks>", "(portcullis) set vertical distance (+up / -down)");
+        line(sender, "/door direction <name> <north|south|east|west>", "(sliding) set the direction it retracts");
+        line(sender, "/door slide <name> <blocks>", "set the travel distance (portcullis: +up / -down)");
         line(sender, "/door trigger <name> redstone", "bind the block you're looking at as a redstone trigger");
         line(sender, "/door trigger <name> float", "place a floating click-trigger at the block you're looking at");
         line(sender, "/door trigger <name> clear", "remove this door's triggers");
@@ -82,11 +83,13 @@ public class DoorCommand implements TabExecutor {
         if (!requireAdmin(sender) || !(sender instanceof Player player)) {
             return;
         }
-        Material wand = Material.matchMaterial(plugin.getWandMaterial());
-        if (wand == null) {
-            wand = Material.BLAZE_ROD;
+        ItemStack wand = plugin.createWand();
+        for (ItemStack leftover : player.getInventory().addItem(wand).values()) {
+            player.getWorld().dropItem(player.getLocation(), leftover);
         }
-        player.getInventory().addItem(new ItemStack(wand));
+        player.sendMessage(Component.text("Received ", NamedTextColor.GREEN)
+                .append(wand.displayName())
+                .append(Component.text(".", NamedTextColor.GREEN)));
         msg(sender, NamedTextColor.GREEN, "Left-click a block for corner 1, right-click for corner 2.");
     }
 
@@ -112,8 +115,9 @@ public class DoorCommand implements TabExecutor {
         plugin.getDoorManager().add(door);
         plugin.saveDoors();
         plugin.getSelectionManager().clear(player.getUniqueId());
-        msg(sender, NamedTextColor.GREEN, "Created door '" + name + "'. Hinge defaults to its min corner; "
-                + "set it with /door hinge " + name + " and pick a direction with /door direction " + name + " cw|ccw.");
+        msg(sender, NamedTextColor.GREEN, "Created door '" + name + "' as a swing door. Its hinge defaults to "
+                + "the min corner; set it with /door hinge " + name + " and pick a direction with /door direction "
+                + name + " cw|ccw. For a different motion, use /door type " + name + " portcullis|sliding.");
 
         int filled = countFilledContainers(player.getWorld(), sel.min(), sel.max());
         if (filled > 0) {
@@ -164,13 +168,16 @@ public class DoorCommand implements TabExecutor {
         msg(sender, NamedTextColor.YELLOW, "  world: " + door.getWorld());
         msg(sender, NamedTextColor.YELLOW, "  min: " + vec(door.getMin()) + "  max: " + vec(door.getMax()));
         msg(sender, NamedTextColor.YELLOW, "  type: " + door.getType().name().toLowerCase());
-        if (door.getType() == DoorType.SWING) {
-            msg(sender, NamedTextColor.YELLOW, "  hinge: " + door.getHingeX() + ", " + door.getHingeZ());
-            msg(sender, NamedTextColor.YELLOW, "  direction: "
-                    + (door.getQuarterTurns() >= 0 ? "clockwise" : "counter-clockwise"));
-        } else {
-            msg(sender, NamedTextColor.YELLOW, "  slide: " + Math.abs(door.getSlide()) + " block(s) "
-                    + (door.getSlide() >= 0 ? "up" : "down"));
+        switch (door.getType()) {
+            case SWING -> {
+                msg(sender, NamedTextColor.YELLOW, "  hinge: " + door.getHingeX() + ", " + door.getHingeZ());
+                msg(sender, NamedTextColor.YELLOW, "  direction: "
+                        + (door.getQuarterTurns() >= 0 ? "clockwise" : "counter-clockwise"));
+            }
+            case PORTCULLIS -> msg(sender, NamedTextColor.YELLOW, "  slide: " + Math.abs(door.getSlide())
+                    + " block(s) " + (door.getSlide() >= 0 ? "up" : "down"));
+            case SLIDING -> msg(sender, NamedTextColor.YELLOW, "  slide: " + door.getSlideDistance()
+                    + " block(s) " + door.getSlideFace().name().toLowerCase(Locale.ROOT));
         }
         msg(sender, NamedTextColor.YELLOW, "  state: " + (door.isOpen() ? "open" : "closed"));
         msg(sender, NamedTextColor.YELLOW, "  redstone trigger: "
@@ -207,7 +214,7 @@ public class DoorCommand implements TabExecutor {
             return;
         }
         if (args.length < 3) {
-            msg(sender, NamedTextColor.RED, "Usage: /door direction <name> <cw|ccw>");
+            msg(sender, NamedTextColor.RED, "Usage: /door direction <name> " + directionOptions(null));
             return;
         }
         Door door = resolve(sender, args);
@@ -215,17 +222,81 @@ public class DoorCommand implements TabExecutor {
             return;
         }
         String dir = args[2].toLowerCase(Locale.ROOT);
-        switch (dir) {
-            case "cw", "clockwise" -> door.setQuarterTurns(1);
-            case "ccw", "counter", "counterclockwise" -> door.setQuarterTurns(-1);
-            default -> {
-                msg(sender, NamedTextColor.RED, "Direction must be 'cw' or 'ccw'.");
-                return;
+        switch (door.getType()) {
+            case SWING -> {
+                switch (dir) {
+                    case "cw", "clockwise" -> door.setQuarterTurns(1);
+                    case "ccw", "counter", "counterclockwise" -> door.setQuarterTurns(-1);
+                    default -> {
+                        msg(sender, NamedTextColor.RED, "A swing door's direction must be 'cw' or 'ccw'.");
+                        return;
+                    }
+                }
+                plugin.saveDoors();
+                msg(sender, NamedTextColor.GREEN, "Direction for '" + door.getName() + "' set to "
+                        + (door.getQuarterTurns() >= 0 ? "clockwise" : "counter-clockwise") + ".");
+            }
+            case PORTCULLIS -> {
+                int distance = Math.abs(door.getSlide());
+                if (distance == 0) {
+                    distance = door.height();
+                }
+                switch (dir) {
+                    case "up" -> door.setSlide(distance);
+                    case "down" -> door.setSlide(-distance);
+                    default -> {
+                        msg(sender, NamedTextColor.RED, "A portcullis' direction must be 'up' or 'down'.");
+                        return;
+                    }
+                }
+                plugin.saveDoors();
+                msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' will now retract " + distance
+                        + " block(s) " + (door.getSlide() >= 0 ? "up" : "down") + ".");
+            }
+            case SLIDING -> {
+                BlockFace face = horizontalFace(dir);
+                if (face == null) {
+                    msg(sender, NamedTextColor.RED,
+                            "A sliding door's direction must be 'north', 'south', 'east' or 'west'.");
+                    return;
+                }
+                door.setSlideFace(face);
+                if (door.getSlideDistance() == 0) {
+                    applyDefaultSlide(door);
+                    door.setSlideFace(face);
+                }
+                plugin.saveDoors();
+                msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' will now retract "
+                        + door.getSlideDistance() + " block(s) " + face.name().toLowerCase(Locale.ROOT) + ".");
             }
         }
-        plugin.saveDoors();
-        msg(sender, NamedTextColor.GREEN, "Direction for '" + door.getName() + "' set to "
-                + (door.getQuarterTurns() >= 0 ? "clockwise" : "counter-clockwise") + ".");
+    }
+
+    /** Parse a cardinal compass direction, or null if the token isn't one. */
+    private static BlockFace horizontalFace(String raw) {
+        return switch (raw.toLowerCase(Locale.ROOT)) {
+            case "north", "n" -> BlockFace.NORTH;
+            case "south", "s" -> BlockFace.SOUTH;
+            case "east", "e" -> BlockFace.EAST;
+            case "west", "w" -> BlockFace.WEST;
+            default -> null;
+        };
+    }
+
+    /** The direction tokens that make sense for a door of the given type (all of them if null). */
+    private static List<String> directionValues(DoorType type) {
+        if (type == null) {
+            return List.of("cw", "ccw", "up", "down", "north", "south", "east", "west");
+        }
+        return switch (type) {
+            case SWING -> List.of("cw", "ccw");
+            case PORTCULLIS -> List.of("up", "down");
+            case SLIDING -> List.of("north", "south", "east", "west");
+        };
+    }
+
+    private static String directionOptions(DoorType type) {
+        return "<" + String.join("|", directionValues(type)) + ">";
     }
 
     private void type(CommandSender sender, String[] args) {
@@ -233,7 +304,7 @@ public class DoorCommand implements TabExecutor {
             return;
         }
         if (args.length < 3) {
-            msg(sender, NamedTextColor.RED, "Usage: /door type <name> <swing|portcullis>");
+            msg(sender, NamedTextColor.RED, "Usage: /door type <name> <swing|portcullis|sliding>");
             return;
         }
         Door door = resolve(sender, args);
@@ -242,22 +313,53 @@ public class DoorCommand implements TabExecutor {
         }
         DoorType type = DoorType.fromString(args[2]);
         if (type == null) {
-            msg(sender, NamedTextColor.RED, "Type must be 'swing' or 'portcullis'.");
+            msg(sender, NamedTextColor.RED, "Type must be 'swing', 'portcullis' or 'sliding'.");
             return;
         }
         door.setType(type);
-        if (type == DoorType.PORTCULLIS && door.getSlide() == 0) {
-            // Default: retract straight up by the door's own height.
-            door.setSlide(door.height());
+        switch (type) {
+            case PORTCULLIS -> {
+                if (door.getSlide() == 0) {
+                    // Default: retract straight up by the door's own height.
+                    door.setSlide(door.height());
+                }
+                plugin.saveDoors();
+                msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' is now a portcullis, sliding "
+                        + Math.abs(door.getSlide()) + " block(s) " + (door.getSlide() >= 0 ? "up" : "down")
+                        + ". Adjust with /door slide " + door.getName() + " <blocks>.");
+            }
+            case SLIDING -> {
+                if (door.getSlideDistance() == 0) {
+                    // Default: retract sideways along the wall the door sits in, by its own width.
+                    applyDefaultSlide(door);
+                }
+                plugin.saveDoors();
+                msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' is now a sliding door, retracting "
+                        + door.getSlideDistance() + " block(s) "
+                        + door.getSlideFace().name().toLowerCase(Locale.ROOT)
+                        + ". Adjust with /door slide " + door.getName() + " <blocks> and /door direction "
+                        + door.getName() + " <north|south|east|west>.");
+            }
+            case SWING -> {
+                plugin.saveDoors();
+                msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' is now a swing door. "
+                        + "Set the hinge and direction with /door hinge and /door direction.");
+            }
         }
-        plugin.saveDoors();
-        if (type == DoorType.PORTCULLIS) {
-            msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' is now a portcullis, sliding "
-                    + Math.abs(door.getSlide()) + " block(s) " + (door.getSlide() >= 0 ? "up" : "down")
-                    + ". Adjust with /door slide " + door.getName() + " <blocks>.");
+    }
+
+    /**
+     * Pick a sensible default slide for a door that has just become {@link DoorType#SLIDING}:
+     * it retracts along its own longest horizontal axis, by its width on that axis, so a wall-shaped
+     * door disappears into the wall beside it.
+     */
+    private void applyDefaultSlide(Door door) {
+        if (door.widthX() >= door.widthZ()) {
+            door.setSlideFace(BlockFace.EAST);
+            door.setSlideDistance(door.widthX());
         } else {
-            msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' is now a swing door. "
-                    + "Set the hinge and direction with /door hinge and /door direction.");
+            door.setSlideFace(BlockFace.SOUTH);
+            door.setSlideDistance(door.widthZ());
         }
     }
 
@@ -266,7 +368,8 @@ public class DoorCommand implements TabExecutor {
             return;
         }
         if (args.length < 3) {
-            msg(sender, NamedTextColor.RED, "Usage: /door slide <name> <blocks>  (positive = up, negative = down)");
+            msg(sender, NamedTextColor.RED,
+                    "Usage: /door slide <name> <blocks>  (portcullis: positive = up, negative = down)");
             return;
         }
         Door door = resolve(sender, args);
@@ -284,10 +387,20 @@ public class DoorCommand implements TabExecutor {
             msg(sender, NamedTextColor.RED, "Slide distance can't be 0.");
             return;
         }
-        door.setSlide(blocks);
-        if (door.getType() != DoorType.PORTCULLIS) {
-            door.setType(DoorType.PORTCULLIS);
+        if (door.getType() == DoorType.SLIDING) {
+            // A sliding door's direction lives in its slide face, so a negative distance flips that face.
+            if (blocks < 0) {
+                door.setSlideFace(door.getSlideFace().getOppositeFace());
+            }
+            door.setSlideDistance(Math.abs(blocks));
+            plugin.saveDoors();
+            msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' will slide " + door.getSlideDistance()
+                    + " block(s) " + door.getSlideFace().name().toLowerCase(Locale.ROOT) + ".");
+            return;
         }
+        // Swing doors fall through to a portcullis: a vertical slide is the only motion a distance means here.
+        door.setSlide(blocks);
+        door.setType(DoorType.PORTCULLIS);
         plugin.saveDoors();
         msg(sender, NamedTextColor.GREEN, "'" + door.getName() + "' will slide " + Math.abs(blocks)
                 + " block(s) " + (blocks >= 0 ? "up" : "down") + ".");
@@ -433,10 +546,12 @@ public class DoorCommand implements TabExecutor {
             return filter(names, args[1]);
         }
         if (args.length == 3 && sub.equals("type")) {
-            return filter(List.of("swing", "portcullis"), args[2]);
+            return filter(List.of("swing", "portcullis", "sliding"), args[2]);
         }
         if (args.length == 3 && sub.equals("direction")) {
-            return filter(List.of("cw", "ccw"), args[2]);
+            // Offer only the directions that apply to the named door, when it resolves.
+            DoorType type = plugin.getDoorManager().byName(args[1]).map(Door::getType).orElse(null);
+            return filter(directionValues(type), args[2]);
         }
         if (args.length == 3 && sub.equals("trigger")) {
             return filter(List.of("redstone", "float", "clear"), args[2]);

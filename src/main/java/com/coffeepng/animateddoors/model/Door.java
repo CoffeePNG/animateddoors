@@ -1,5 +1,7 @@
 package com.coffeepng.animateddoors.model;
 
+import org.bukkit.block.BlockFace;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -30,6 +32,12 @@ public class Door {
 
     /** Vertical slide distance in blocks; + = up, - = down. Portcullis doors only. */
     private int slide;
+
+    /** Horizontal direction the door retracts towards when opening. Sliding doors only. */
+    private BlockFace slideFace = BlockFace.EAST;
+
+    /** Horizontal slide distance in blocks (always positive). Sliding doors only. */
+    private int slideDistance;
 
     private boolean open;
 
@@ -137,9 +145,43 @@ public class Door {
         this.slide = slide;
     }
 
+    public BlockFace getSlideFace() {
+        return slideFace;
+    }
+
+    /**
+     * Set the horizontal direction a sliding door retracts towards.
+     *
+     * @throws IllegalArgumentException if {@code face} is not one of the four cardinal directions
+     */
+    public void setSlideFace(BlockFace face) {
+        if (face == null || face.getModY() != 0 || Math.abs(face.getModX()) + Math.abs(face.getModZ()) != 1) {
+            throw new IllegalArgumentException("Slide direction must be north, south, east or west.");
+        }
+        this.slideFace = face;
+    }
+
+    public int getSlideDistance() {
+        return slideDistance;
+    }
+
+    public void setSlideDistance(int slideDistance) {
+        this.slideDistance = slideDistance;
+    }
+
     /** Height of the door's closed footprint in blocks. */
     public int height() {
         return max.y() - min.y() + 1;
+    }
+
+    /** Width of the door's closed footprint along X, in blocks. */
+    public int widthX() {
+        return max.x() - min.x() + 1;
+    }
+
+    /** Width of the door's closed footprint along Z, in blocks. */
+    public int widthZ() {
+        return max.z() - min.z() + 1;
     }
 
     public boolean isOpen() {

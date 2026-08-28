@@ -7,7 +7,6 @@ import com.coffeepng.animateddoors.model.Door;
 import com.coffeepng.animateddoors.selection.SelectionManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Interaction;
 import org.bukkit.entity.Player;
@@ -17,7 +16,6 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
-import org.bukkit.inventory.ItemStack;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -45,7 +43,7 @@ public class PlayerListener implements Listener {
         Player player = event.getPlayer();
 
         // Selection wand takes priority for admins holding it.
-        if (isWand(event.getItem()) && player.hasPermission("animateddoors.admin")) {
+        if (plugin.isWand(event.getItem()) && player.hasPermission("animateddoors.admin")) {
             handleWand(event, player, block);
             return;
         }
@@ -103,14 +101,6 @@ public class PlayerListener implements Listener {
         if (result != ToggleResult.STARTED) {
             player.sendMessage(Component.text(result.message(), NamedTextColor.GRAY));
         }
-    }
-
-    private boolean isWand(ItemStack item) {
-        if (item == null) {
-            return false;
-        }
-        Material wand = Material.matchMaterial(plugin.getWandMaterial());
-        return wand != null && item.getType() == wand;
     }
 
     private static String describe(BlockVector3 pos) {

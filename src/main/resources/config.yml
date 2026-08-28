@@ -22,3 +22,13 @@ restrictions:
 selection:
   # Material of the selection wand given by /door wand.
   wand-material: BLAZE_ROD
+  # Display name of the wand. MiniMessage formatting is supported (<gold>, <bold>, <#ff8800>, ...).
+  wand-name: "<gold>Door Wand"
+  # Optional lore lines shown under the name. Same formatting as wand-name.
+  wand-lore:
+    - "<gray>Left-click: corner 1"
+    - "<gray>Right-click: corner 2"
+  # If true, only wands handed out by /door wand select corners — they carry a hidden tag, so an
+  # ordinary item of the same material is just an ordinary item. Set to false to let any item of
+  # wand-material act as a wand (the behaviour before wands were named).
+  strict-wand: true
