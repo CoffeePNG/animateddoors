@@ -8,7 +8,6 @@ import com.coffeepng.dynamicdoors.selection.SelectionManager;
 import com.coffeepng.dynamicdoors.selection.SelectionMode;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Interaction;
 import org.bukkit.entity.Player;
@@ -19,7 +18,6 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
-import org.bukkit.inventory.ItemStack;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -47,7 +45,7 @@ public class PlayerListener implements Listener {
         Player player = event.getPlayer();
 
         // Selection wand takes priority for admins holding it.
-        if (isWand(event.getItem()) && player.hasPermission("dynamicdoors.admin")) {
+        if (plugin.isWand(event.getItem()) && player.hasPermission("dynamicdoors.admin")) {
             handleWand(event, player, block);
             return;
         }
@@ -206,11 +204,4 @@ public class PlayerListener implements Listener {
         }
     }
 
-    private boolean isWand(ItemStack item) {
-        if (item == null) {
-            return false;
-        }
-        Material wand = Material.matchMaterial(plugin.getWandMaterial());
-        return wand != null && item.getType() == wand;
-    }
 }

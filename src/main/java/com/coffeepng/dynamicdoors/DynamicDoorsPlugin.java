@@ -15,6 +15,9 @@ import com.coffeepng.dynamicdoors.model.Door;
 import com.coffeepng.dynamicdoors.preview.PreviewManager;
 import com.coffeepng.dynamicdoors.selection.SelectionManager;
 import com.coffeepng.dynamicdoors.selection.SelectionMode;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -22,9 +25,13 @@ import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Interaction;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +47,7 @@ public class DynamicDoorsPlugin extends JavaPlugin {
     private PhysicsGuard physicsGuard;
 
     private NamespacedKey doorKey;
+    private NamespacedKey wandKey;
 
     /** The door each player is currently working on, so commands don't need a name every time. */
     private final Map<UUID, UUID> activeDoors = new HashMap<>();
@@ -53,6 +61,9 @@ public class DynamicDoorsPlugin extends JavaPlugin {
     private boolean suppressBlockUpdates;
     private int updateGuardGraceTicks;
     private String wandMaterial;
+    private String wandName;
+    private List<String> wandLore;
+    private boolean strictWand;
     private int attachLimit;
     private Material powerBlockMaterial;
     private boolean requirePowerBlockMaterial;
@@ -71,6 +82,7 @@ public class DynamicDoorsPlugin extends JavaPlugin {
         readConfigValues();
 
         this.doorKey = new NamespacedKey(this, "door");
+        this.wandKey = new NamespacedKey(this, "wand");
         this.doorManager = new DoorManager();
         this.doorStorage = new DoorStorage(getDataFolder(), getLogger());
         this.doorStorage.setCompact(getConfig().getBoolean("storage.compact", true));
@@ -133,6 +145,9 @@ public class DynamicDoorsPlugin extends JavaPlugin {
         this.clickPowerBlock = getConfig().getBoolean("power-block.click-to-toggle", true);
         this.givePowerBlockWithWand = getConfig().getBoolean("power-block.give-with-wand", true);
         this.wandMaterial = getConfig().getString("selection.wand-material", "BLAZE_ROD");
+        this.wandName = getConfig().getString("selection.wand-name", "<gold>Door Wand");
+        this.wandLore = getConfig().getStringList("selection.wand-lore");
+        this.strictWand = getConfig().getBoolean("selection.strict-wand", true);
         this.attachLimit = getConfig().getInt("selection.attach-limit", 256);
         this.previewEnabled = getConfig().getBoolean("preview.enabled", true);
         this.previewTicks = getConfig().getInt("preview.duration-ticks", 200);
@@ -511,6 +526,63 @@ public class DynamicDoorsPlugin extends JavaPlugin {
 
     public String getWandMaterial() {
         return wandMaterial;
+    }
+
+    public NamespacedKey getWandKey() {
+        return wandKey;
+    }
+
+    // ---- Selection wand ----------------------------------------------------
+
+    /** The wand material from the config, falling back to a blaze rod if it isn't a real material. */
+    public Material wandMaterial() {
+        Material material = Material.matchMaterial(wandMaterial);
+        return material == null ? Material.BLAZE_ROD : material;
+    }
+
+    /** Build a fresh selection wand: the configured material, custom name and lore, tagged as ours. */
+    public ItemStack createWand() {
+        ItemStack item = new ItemStack(wandMaterial());
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(deserialize(wandName));
+        if (!wandLore.isEmpty()) {
+            List<Component> lore = new ArrayList<>(wandLore.size());
+            for (String line : wandLore) {
+                lore.add(deserialize(line));
+            }
+            meta.lore(lore);
+        }
+        meta.getPersistentDataContainer().set(wandKey, PersistentDataType.BYTE, (byte) 1);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    /**
+     * True if {@code item} is a selection wand.
+     *
+     * <p>Wands are identified by the persistent tag {@link #createWand()} stamps on them, so an ordinary
+     * item of the same material is never mistaken for one. With {@code selection.strict-wand: false}
+     * any item of the wand material also counts, which keeps wands handed out by older versions
+     * (and ones players give themselves) working.</p>
+     */
+    public boolean isWand(ItemStack item) {
+        if (item == null || item.getType().isAir()) {
+            return false;
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            PersistentDataContainer pdc = meta.getPersistentDataContainer();
+            Byte tag = pdc.get(wandKey, PersistentDataType.BYTE);
+            if (tag != null && tag != 0) {
+                return true;
+            }
+        }
+        return !strictWand && item.getType() == wandMaterial();
+    }
+
+    /** Parse a configured MiniMessage string, without the default italic styling item text picks up. */
+    private static Component deserialize(String raw) {
+        return MiniMessage.miniMessage().deserialize(raw).decoration(TextDecoration.ITALIC, false);
     }
 
     /** Most blocks a single /door attach scan will pull in. */
